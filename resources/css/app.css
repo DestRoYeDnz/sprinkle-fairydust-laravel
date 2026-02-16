@@ -1,0 +1,419 @@
+@import 'tailwindcss';
+
+@import 'tw-animate-css';
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --font-sans:
+        Instrument Sans, ui-sans-serif, system-ui, sans-serif,
+        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+        'Noto Color Emoji';
+
+    --radius-lg: var(--radius);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-sm: calc(var(--radius) - 4px);
+
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+
+    --color-chart-1: var(--chart-1);
+    --color-chart-2: var(--chart-2);
+    --color-chart-3: var(--chart-3);
+    --color-chart-4: var(--chart-4);
+    --color-chart-5: var(--chart-5);
+
+    --color-sidebar: var(--sidebar-background);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/*
+  The default border color has changed to `currentColor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+    *,
+    ::after,
+    ::before,
+    ::backdrop,
+    ::file-selector-button {
+        border-color: var(--color-gray-200, currentColor);
+    }
+}
+
+@layer utilities {
+    body,
+    html {
+        --font-sans:
+            'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
+            'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+            'Noto Color Emoji';
+    }
+}
+
+:root {
+    --background: hsl(0 0% 100%);
+    --foreground: hsl(0 0% 3.9%);
+    --card: hsl(0 0% 100%);
+    --card-foreground: hsl(0 0% 3.9%);
+    --popover: hsl(0 0% 100%);
+    --popover-foreground: hsl(0 0% 3.9%);
+    --primary: hsl(0 0% 9%);
+    --primary-foreground: hsl(0 0% 98%);
+    --secondary: hsl(0 0% 92.1%);
+    --secondary-foreground: hsl(0 0% 9%);
+    --muted: hsl(0 0% 96.1%);
+    --muted-foreground: hsl(0 0% 45.1%);
+    --accent: hsl(0 0% 96.1%);
+    --accent-foreground: hsl(0 0% 9%);
+    --destructive: hsl(0 84.2% 60.2%);
+    --destructive-foreground: hsl(0 0% 98%);
+    --border: hsl(0 0% 92.8%);
+    --input: hsl(0 0% 89.8%);
+    --ring: hsl(0 0% 3.9%);
+    --chart-1: hsl(12 76% 61%);
+    --chart-2: hsl(173 58% 39%);
+    --chart-3: hsl(197 37% 24%);
+    --chart-4: hsl(43 74% 66%);
+    --chart-5: hsl(27 87% 67%);
+    --radius: 0.5rem;
+    --sidebar-background: hsl(0 0% 98%);
+    --sidebar-foreground: hsl(240 5.3% 26.1%);
+    --sidebar-primary: hsl(0 0% 10%);
+    --sidebar-primary-foreground: hsl(0 0% 98%);
+    --sidebar-accent: hsl(0 0% 94%);
+    --sidebar-accent-foreground: hsl(0 0% 30%);
+    --sidebar-border: hsl(0 0% 91%);
+    --sidebar-ring: hsl(217.2 91.2% 59.8%);
+    --sidebar: hsl(0 0% 98%);
+}
+
+.dark {
+    --background: hsl(0 0% 3.9%);
+    --foreground: hsl(0 0% 98%);
+    --card: hsl(0 0% 3.9%);
+    --card-foreground: hsl(0 0% 98%);
+    --popover: hsl(0 0% 3.9%);
+    --popover-foreground: hsl(0 0% 98%);
+    --primary: hsl(0 0% 98%);
+    --primary-foreground: hsl(0 0% 9%);
+    --secondary: hsl(0 0% 14.9%);
+    --secondary-foreground: hsl(0 0% 98%);
+    --muted: hsl(0 0% 16.08%);
+    --muted-foreground: hsl(0 0% 63.9%);
+    --accent: hsl(0 0% 14.9%);
+    --accent-foreground: hsl(0 0% 98%);
+    --destructive: hsl(0 84% 60%);
+    --destructive-foreground: hsl(0 0% 98%);
+    --border: hsl(0 0% 14.9%);
+    --input: hsl(0 0% 14.9%);
+    --ring: hsl(0 0% 83.1%);
+    --chart-1: hsl(220 70% 50%);
+    --chart-2: hsl(160 60% 45%);
+    --chart-3: hsl(30 80% 55%);
+    --chart-4: hsl(280 65% 60%);
+    --chart-5: hsl(340 75% 55%);
+    --sidebar-background: hsl(0 0% 7%);
+    --sidebar-foreground: hsl(0 0% 95.9%);
+    --sidebar-primary: hsl(360, 100%, 100%);
+    --sidebar-primary-foreground: hsl(0 0% 100%);
+    --sidebar-accent: hsl(0 0% 15.9%);
+    --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
+    --sidebar-border: hsl(0 0% 15.9%);
+    --sidebar-ring: hsl(217.2 91.2% 59.8%);
+    --sidebar: hsl(240 5.9% 10%);
+}
+
+@layer base {
+    * {
+        @apply border-border outline-ring/50;
+    }
+    body {
+        @apply bg-background text-foreground;
+        margin: 0;
+        min-height: 100vh;
+    }
+}
+
+@layer utilities {
+    .font-dancing {
+        font-family: 'Dancing Script', cursive;
+    }
+
+    .font-quicksand {
+        font-family: 'Quicksand', sans-serif;
+    }
+}
+
+html.sprinkle-theme,
+body.sprinkle-theme {
+    background: linear-gradient(
+        120deg,
+        #1a4f7a 0%,
+        #2b7db1 34%,
+        #4bb7c8 66%,
+        #9edff2 100%
+    );
+    background-size: 280% 280%;
+    background-position: 50% 50%;
+    background-attachment: fixed;
+    min-height: 100vh;
+    color: #fff;
+    overflow-x: hidden;
+    margin: 0;
+    position: relative;
+    animation: sprinkleSkyDrift 20s ease infinite;
+}
+
+@keyframes sprinkleSkyDrift {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+.page-content {
+    position: relative;
+    z-index: 20;
+}
+
+.stars {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 0;
+}
+
+.star {
+    position: absolute;
+    border-radius: 50%;
+    width: 4px;
+    height: 4px;
+    opacity: 0.9;
+    background: radial-gradient(
+        circle,
+        rgba(255, 255, 255, 1) 0%,
+        rgba(255, 255, 255, 0.1) 70%
+    );
+    box-shadow: 0 0 6px 2px rgba(125, 211, 252, 0.55);
+    animation: fall linear infinite, twinkle 0.1s ease-in-out infinite;
+}
+
+@keyframes fall {
+    0% {
+        transform: translateY(-5vh) scale(1);
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(105vh) scale(0.5);
+        opacity: 0;
+    }
+}
+
+@keyframes twinkle {
+    0%,
+    100% {
+        opacity: 0.7;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+.nav-wrap {
+    position: relative;
+    z-index: 40;
+    display: flex;
+    justify-content: center;
+    padding-top: 6rem;
+    padding-inline: 1rem;
+}
+
+.nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.45rem 0.95rem;
+    width: min(100%, 980px);
+    padding: 0.7rem 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 1.35rem;
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(186, 230, 253, 0.08)),
+        linear-gradient(115deg, rgba(14, 165, 233, 0.14), rgba(45, 212, 191, 0.14));
+    backdrop-filter: blur(8px);
+    box-shadow:
+        0 10px 24px rgba(7, 31, 52, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.nav a {
+    position: relative;
+    color: rgba(255, 255, 255, 0.96);
+    text-decoration: none;
+    font-size: 0.99rem;
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 0.4rem 0.45rem 0.5rem;
+    border-radius: 0.65rem;
+    border: 1px solid transparent;
+    background: transparent;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    transition:
+        transform 0.2s ease,
+        background 0.2s ease,
+        border-color 0.2s ease,
+        color 0.2s ease,
+        box-shadow 0.2s ease,
+        opacity 0.2s ease;
+}
+
+.nav a::after {
+    content: '';
+    position: absolute;
+    left: 0.4rem;
+    right: 0.4rem;
+    bottom: 0.18rem;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(125, 211, 252, 0.95), rgba(153, 246, 228, 0.95));
+    opacity: 0;
+    transform: scaleX(0.65);
+    transform-origin: center;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.nav a:hover {
+    transform: translateY(-1px);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.24);
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 6px 14px rgba(7, 31, 52, 0.16);
+}
+
+.nav a:hover::after {
+    opacity: 0.9;
+    transform: scaleX(1);
+}
+
+.nav a:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.85);
+    outline-offset: 2px;
+}
+
+.nav a.active {
+    color: #e9fbff;
+    border-color: rgba(224, 247, 255, 0.6);
+    background: rgba(186, 230, 253, 0.18);
+    box-shadow:
+        0 8px 18px rgba(7, 31, 52, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.nav a.active::after {
+    opacity: 1;
+    transform: scaleX(1);
+}
+
+.floating-logo {
+    position: fixed;
+    top: 1.75rem;
+    left: 1rem;
+    width: 220px;
+    z-index: 50;
+    filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.4));
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    animation: fadeIn 0.8s ease-in-out;
+}
+
+.floating-logo:hover {
+    transform: scale(1.05);
+    opacity: 0.9;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 768px) {
+    .floating-logo {
+        position: relative;
+        display: block;
+        margin: 1rem auto 0;
+        width: 200px;
+    }
+
+    .nav-wrap {
+        padding-top: 2.5rem;
+        padding-inline: 0.75rem;
+    }
+
+    .nav {
+        width: 100%;
+        gap: 0.4rem;
+        padding: 0.55rem;
+        border-radius: 1rem;
+    }
+
+    .nav a {
+        flex: 1 1 calc(50% - 0.4rem);
+        text-align: center;
+        font-size: 0.95rem;
+        padding: 0.55rem 0.7rem 0.6rem;
+        border-radius: 0.8rem;
+    }
+}

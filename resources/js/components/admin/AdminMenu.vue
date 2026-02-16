@@ -13,6 +13,7 @@ const menuItems = [
     { label: 'Add User', href: '/admin/users/create' },
     { label: 'Calculator', href: '/admin/calculator' },
     { label: 'Settings', href: '/admin/settings' },
+    { label: 'Tracking', href: '/admin/tracking' },
 ];
 
 const currentPath = computed(() => page.url.split('?')[0]);
@@ -63,7 +64,7 @@ watch(currentPath, () => {
             <span class="text-xs">{{ mobileMenuOpen ? 'Hide' : 'Show' }}</span>
         </button>
 
-        <nav :class="['gap-2 sm:grid sm:grid-cols-2 lg:grid-cols-8', mobileMenuOpen ? 'grid' : 'hidden']">
+        <nav :class="['gap-2 sm:grid sm:grid-cols-2 lg:grid-cols-9', mobileMenuOpen ? 'grid' : 'hidden']">
             <Link
                 v-for="item in menuItems"
                 :key="item.href"

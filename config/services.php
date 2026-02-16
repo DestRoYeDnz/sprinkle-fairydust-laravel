@@ -37,9 +37,14 @@ return [
 
     'sprinkle' => [
         'admin_auth_key' => env('ADMIN_AUTH_KEY'),
-        'brevo_api_key' => env('BREVO_API_KEY'),
-        'brevo_from_email' => env('BREVO_FROM_EMAIL'),
-        'brevo_to_email' => env('BREVO_TO_EMAIL'),
+        'quote_notification_email' => env('QUOTE_NOTIFICATION_EMAIL', 'brettj@dekode.co.nz'),
+        'testimonial_notification_email' => env('TESTIMONIAL_NOTIFICATION_EMAIL', env('QUOTE_NOTIFICATION_EMAIL', 'brettj@dekode.co.nz')),
+        'quote_admin_copy_email' => env('QUOTE_ADMIN_COPY_EMAIL'),
+        'quote_link_expiry_days' => env('QUOTE_LINK_EXPIRY_DAYS', 45),
+        'geoip_endpoint' => env('GEOIP_ENDPOINT'),
+        'geoip_token' => env('GEOIP_TOKEN'),
+        'geoip_timeout_seconds' => env('GEOIP_TIMEOUT_SECONDS', 2),
+        'geoip_cache_minutes' => env('GEOIP_CACHE_MINUTES', 1440),
     ],
 
 ];

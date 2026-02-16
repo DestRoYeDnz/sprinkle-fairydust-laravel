@@ -19,6 +19,7 @@ const creating = ref(false);
 const testimonials = ref([]);
 const testimonialPendingDelete = ref(null);
 const showDeleteDialog = ref(false);
+const showCreateForm = ref(false);
 
 const createForm = ref({
     name: '',
@@ -305,9 +306,18 @@ onMounted(() => {
             <AdminMenu />
 
             <section class="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-md">
-                <h2 class="mb-4 text-2xl font-semibold text-sky-900">Add Testimonial</h2>
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <h2 class="text-2xl font-semibold text-sky-900">Add Testimonial</h2>
+                    <button class="secondary-btn" type="button" @click="showCreateForm = !showCreateForm">
+                        {{ showCreateForm ? 'Hide Form' : 'Show Form' }}
+                    </button>
+                </div>
 
-                <form class="space-y-4" @submit.prevent="createTestimonial">
+                <p v-if="!showCreateForm" class="text-sm text-slate-600">
+                    Form is minimized by default. Select "Show Form" to add a testimonial.
+                </p>
+
+                <form v-else class="space-y-4" @submit.prevent="createTestimonial">
                     <label class="field-label">Name
                         <input v-model="createForm.name" type="text" class="input" required />
                     </label>

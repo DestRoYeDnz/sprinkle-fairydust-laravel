@@ -1,8 +1,11 @@
 <?php
 
+use App\Mail\StyledHtmlMail;
 use App\Models\Quote;
 use App\Models\Testimonial;
 use App\Models\User;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\URL;
 
 it('allows admin users to manage quotes', function () {
     $admin = User::factory()->create([
@@ -13,12 +16,19 @@ it('allows admin users to manage quotes', function () {
         ->postJson(route('admin.quotes.store'), [
             'name' => 'Jamie Smith',
             'email' => 'jamie@example.com',
+            'anonymous_id' => 'anon_admin_quote_1',
             'event_type' => 'Birthday',
             'event_date' => now()->toDateString(),
             'start_time' => '10:00',
             'end_time' => '13:00',
             'address' => '55 Sample Road',
-            'details' => 'Outdoor setup requested',
+            'calc_payment_type' => 'hourly',
+            'calc_base_amount' => 360,
+            'calc_setup_amount' => 60,
+            'calc_travel_amount' => 25,
+            'calc_subtotal' => 445,
+            'calc_gst_amount' => 66.75,
+            'calc_total_amount' => 511.75,
         ]);
 
     $createResponse->assertOk()->assertJsonPath('success', true);
@@ -29,6 +39,7 @@ it('allows admin users to manage quotes', function () {
         'id' => $quoteId,
         'name' => 'Jamie Smith',
         'email' => 'jamie@example.com',
+        'anonymous_id' => 'anon_admin_quote_1',
     ]);
 
     $this->actingAs($admin)
@@ -46,7 +57,13 @@ it('allows admin users to manage quotes', function () {
             'end_time' => '14:00',
             'total_hours' => 3,
             'address' => '88 Updated Avenue',
-            'details' => 'Updated details',
+            'calc_payment_type' => 'perface',
+            'calc_base_amount' => 500,
+            'calc_setup_amount' => 0,
+            'calc_travel_amount' => 40,
+            'calc_subtotal' => 540,
+            'calc_gst_amount' => 81,
+            'calc_total_amount' => 621,
         ]);
 
     $updateResponse->assertOk()->assertJsonPath('success', true);
@@ -55,8 +72,40 @@ it('allows admin users to manage quotes', function () {
         'id' => $quoteId,
         'event_type' => 'Festival',
         'address' => '88 Updated Avenue',
-        'details' => 'Updated details',
+        'calc_payment_type' => 'perface',
+        'calc_total_amount' => 621,
     ]);
+
+    config([
+        'services.sprinkle.quote_admin_copy_email' => 'admin@sprinkle.test',
+        'mail.from.address' => 'quotes@sprinkle.test',
+        'app.url' => 'https://sprinkle.test',
+    ]);
+
+    Mail::fake();
+
+    $this->actingAs($admin)
+        ->postJson(route('admin.quotes.send-email', ['quote' => $quoteId]))
+        ->assertOk()
+        ->assertJsonPath('success', true);
+
+    Mail::assertSent(StyledHtmlMail::class, function (StyledHtmlMail $mail) {
+        return $mail->hasTo('jamie@example.com')
+            && $mail->hasBcc('admin@sprinkle.test')
+            && str_contains($mail->mailSubject, 'Sprinkle Fairydust Quote')
+            && str_contains($mail->htmlContent, 'Sprinkle Fairydust Quote');
+    });
+
+    $this->assertDatabaseHas('quotes', [
+        'id' => $quoteId,
+        'email_send_status' => 'sent',
+    ]);
+
+    $sentQuote = Quote::query()->findOrFail($quoteId);
+    expect($sentQuote->email_send_attempted_at)->not->toBeNull();
+    expect($sentQuote->email_send_response)->toBeArray();
+    expect(data_get($sentQuote->email_send_response, 'ok'))->toBeTrue();
+    expect(data_get($sentQuote->email_send_response, 'mailer'))->toBe(config('mail.default'));
 
     $this->actingAs($admin)
         ->deleteJson(route('admin.quotes.destroy', ['quote' => $quoteId]))
@@ -99,6 +148,62 @@ it('forbids non-admin users from managing quotes', function () {
     $this->actingAs($user)
         ->deleteJson(route('admin.quotes.destroy', ['quote' => $quote->id]))
         ->assertForbidden();
+
+    $this->actingAs($user)
+        ->postJson(route('admin.quotes.send-email', ['quote' => $quote->id]))
+        ->assertForbidden();
+});
+
+it('confirms quote via signed email webhook link', function () {
+    $quote = Quote::query()->create([
+        'name' => 'Signed Client',
+        'email' => 'signed-client@example.com',
+    ]);
+
+    $url = URL::temporarySignedRoute('quotes.confirm', now()->addMinutes(30), [
+        'quote' => $quote->id,
+    ]);
+
+    $this->get($url)
+        ->assertOk()
+        ->assertSee('Quote Confirmation');
+
+    $quote->refresh();
+    expect($quote->client_confirmed_at)->not->toBeNull();
+});
+
+it('tracks quote email opens via signed pixel webhook link', function () {
+    $quote = Quote::query()->create([
+        'name' => 'Open Tracker',
+        'email' => 'open-tracker@example.com',
+    ]);
+
+    $url = URL::temporarySignedRoute('quotes.open', now()->addMinutes(30), [
+        'quote' => $quote->id,
+    ]);
+
+    $this->get($url)
+        ->assertOk()
+        ->assertHeader('Content-Type', 'image/gif');
+
+    $quote->refresh();
+    expect($quote->email_opened_at)->not->toBeNull();
+    expect($quote->email_last_opened_at)->not->toBeNull();
+    expect($quote->email_open_count)->toBe(1);
+
+    $this->get($url)->assertOk();
+    $quote->refresh();
+    expect($quote->email_open_count)->toBe(2);
+});
+
+it('rejects unsigned quote webhook links', function () {
+    $quote = Quote::query()->create([
+        'name' => 'Unsigned Client',
+        'email' => 'unsigned-client@example.com',
+    ]);
+
+    $this->get("/quotes/{$quote->id}/confirm")->assertForbidden();
+    $this->get("/quotes/{$quote->id}/open")->assertForbidden();
 });
 
 it('allows admin users to manage testimonials', function () {

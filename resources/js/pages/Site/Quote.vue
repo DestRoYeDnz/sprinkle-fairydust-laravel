@@ -1,6 +1,7 @@
 <script setup>
 import { Head } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import { getOrCreateAnonymousId } from '@/lib/pageTracking';
 import SprinkleLayout from '../../layouts/SprinkleLayout.vue';
 
 defineOptions({
@@ -81,13 +82,18 @@ async function submitForm() {
     }
 
     try {
+        const payload = {
+            ...form.value,
+            anonymous_id: getOrCreateAnonymousId(),
+        };
+
         const response = await fetch('/api/quotes', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 Accept: 'application/json',
             },
-            body: JSON.stringify(form.value),
+            body: JSON.stringify(payload),
         });
 
         const data = await response.json();

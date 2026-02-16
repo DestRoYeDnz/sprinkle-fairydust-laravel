@@ -1,8 +1,16 @@
 <?php
 
+use App\Mail\StyledHtmlMail;
 use App\Models\Testimonial;
+use Illuminate\Support\Facades\Mail;
 
 it('stores public testimonials as pending approval', function () {
+    config([
+        'services.sprinkle.testimonial_notification_email' => 'brettj@dekode.co.nz',
+    ]);
+
+    Mail::fake();
+
     $response = $this->postJson('/api/testimonials', [
         'name' => 'Public User',
         'testimonial' => 'Loved the face painting!',
@@ -17,6 +25,11 @@ it('stores public testimonials as pending approval', function () {
         'testimonial' => 'Loved the face painting!',
         'is_approved' => false,
     ]);
+
+    Mail::assertSent(StyledHtmlMail::class, function (StyledHtmlMail $mail): bool {
+        return $mail->hasTo('brettj@dekode.co.nz')
+            && str_contains($mail->mailSubject, 'New Testimonial Submission');
+    });
 });
 
 it('returns only approved testimonials on the public testimonials endpoint', function () {

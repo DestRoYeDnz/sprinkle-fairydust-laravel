@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Quote extends Model
 {
@@ -17,13 +18,27 @@ class Quote extends Model
     protected $fillable = [
         'name',
         'email',
+        'anonymous_id',
         'event_type',
         'event_date',
         'address',
         'start_time',
         'end_time',
         'total_hours',
-        'details',
+        'calc_payment_type',
+        'calc_base_amount',
+        'calc_setup_amount',
+        'calc_travel_amount',
+        'calc_subtotal',
+        'calc_gst_amount',
+        'calc_total_amount',
+        'email_send_status',
+        'email_send_attempted_at',
+        'email_send_response',
+        'client_confirmed_at',
+        'email_opened_at',
+        'email_last_opened_at',
+        'email_open_count',
     ];
 
     /**
@@ -34,5 +49,22 @@ class Quote extends Model
     protected $casts = [
         'event_date' => 'date',
         'total_hours' => 'float',
+        'calc_base_amount' => 'float',
+        'calc_setup_amount' => 'float',
+        'calc_travel_amount' => 'float',
+        'calc_subtotal' => 'float',
+        'calc_gst_amount' => 'float',
+        'calc_total_amount' => 'float',
+        'email_send_attempted_at' => 'datetime',
+        'email_send_response' => 'array',
+        'client_confirmed_at' => 'datetime',
+        'email_opened_at' => 'datetime',
+        'email_last_opened_at' => 'datetime',
+        'email_open_count' => 'integer',
     ];
+
+    public function pageViews(): HasMany
+    {
+        return $this->hasMany(PageView::class, 'anonymous_id', 'anonymous_id');
+    }
 }

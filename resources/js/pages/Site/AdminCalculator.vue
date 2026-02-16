@@ -10,6 +10,7 @@ defineOptions({
 
 const settingsLoading = ref(false);
 const settingsError = ref('');
+const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 
 function defaultCalculatorSettings() {
     return {
@@ -55,11 +56,17 @@ const form = ref({ ...defaults.form });
 
 const showResult = ref(false);
 const notification = ref('');
+const savingQuote = ref(false);
+const saveQuoteSuccess = ref('');
+const saveQuoteError = ref('');
 
 const result = ref({
     baseLine: '',
+    baseAmount: 0,
     setupLine: '',
+    setupAmount: 0,
     travelLine: '',
+    travelAmount: 0,
     subtotal: 0,
     gstAmount: 0,
     total: 0,
@@ -67,6 +74,13 @@ const result = ref({
     endDisplay: '—',
     hoursDisplay: 0,
     eventSummary: '',
+});
+
+const canSaveQuote = computed(() => {
+    const name = String(form.value.organizerName ?? '').trim();
+    const email = String(form.value.organizerEmail ?? '').trim();
+
+    return name.length > 0 && email.length > 0;
 });
 
 function toNumber(value) {
@@ -212,6 +226,9 @@ function applyQueryParams() {
 }
 
 function calculateTotal() {
+    saveQuoteSuccess.value = '';
+    saveQuoteError.value = '';
+
     const paymentMode = form.value.paymentType;
 
     let baseTotal = 0;
@@ -262,8 +279,11 @@ function calculateTotal() {
 
     result.value = {
         baseLine,
+        baseAmount: baseTotal,
         setupLine,
+        setupAmount: setupTotal,
         travelLine,
+        travelAmount: travelTotal,
         subtotal,
         gstAmount,
         total,
@@ -349,6 +369,90 @@ function generateEmail() {
 
 function resetForm() {
     window.location.reload();
+}
+
+function firstValidationError(errors) {
+    if (!errors || typeof errors !== 'object') {
+        return null;
+    }
+
+    for (const value of Object.values(errors)) {
+        if (Array.isArray(value) && value.length > 0) {
+            return String(value[0]);
+        }
+    }
+
+    return null;
+}
+
+function quotePayload() {
+    const eventType = String(form.value.eventName ?? '').trim();
+    const totalHours = toNumber(result.value.hoursDisplay);
+
+    return {
+        name: String(form.value.organizerName ?? '').trim(),
+        email: String(form.value.organizerEmail ?? '').trim(),
+        event_type: eventType || null,
+        event_date: form.value.eventDate || null,
+        address: null,
+        start_time: form.value.startTime || null,
+        end_time: form.value.endTime || null,
+        total_hours: totalHours > 0 ? totalHours : null,
+        calc_payment_type: form.value.paymentType || null,
+        calc_base_amount: Number(result.value.baseAmount.toFixed(2)),
+        calc_setup_amount: Number(result.value.setupAmount.toFixed(2)),
+        calc_travel_amount: Number(result.value.travelAmount.toFixed(2)),
+        calc_subtotal: Number(result.value.subtotal.toFixed(2)),
+        calc_gst_amount: Number(result.value.gstAmount.toFixed(2)),
+        calc_total_amount: Number(result.value.total.toFixed(2)),
+    };
+}
+
+async function saveQuote() {
+    saveQuoteSuccess.value = '';
+    saveQuoteError.value = '';
+
+    if (!showResult.value) {
+        saveQuoteError.value = 'Calculate a quote before saving.';
+        return;
+    }
+
+    if (!canSaveQuote.value) {
+        saveQuoteError.value = 'Organizer name and email are required to save a quote.';
+        return;
+    }
+
+    savingQuote.value = true;
+
+    try {
+        const response = await fetch('/admin/quotes', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+            },
+            body: JSON.stringify(quotePayload()),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            saveQuoteError.value =
+                firstValidationError(data.errors) ||
+                data.message ||
+                data.error ||
+                'Failed to save quote.';
+
+            return;
+        }
+
+        saveQuoteSuccess.value = 'Quote saved to admin quotes.';
+    } catch {
+        saveQuoteError.value = 'Failed to save quote.';
+    } finally {
+        savingQuote.value = false;
+    }
 }
 
 onMounted(async () => {
@@ -565,9 +669,17 @@ onMounted(async () => {
                         <div class="flex flex-wrap gap-3">
                             <button type="button" class="primary-btn" @click="copyQuote">Copy Quote</button>
                             <button type="button" class="secondary-btn" @click="generateEmail">Generate Email</button>
+                            <button type="button" class="secondary-btn" :disabled="savingQuote" @click="saveQuote">
+                                {{ savingQuote ? 'Saving...' : 'Save Quote' }}
+                            </button>
                         </div>
 
+                        <p v-if="!canSaveQuote" class="text-xs font-semibold text-amber-700">
+                            Add organizer name and email to save this quote.
+                        </p>
                         <p v-if="notification" class="text-sm font-semibold text-emerald-700">{{ notification }}</p>
+                        <p v-if="saveQuoteSuccess" class="text-sm font-semibold text-emerald-700">{{ saveQuoteSuccess }}</p>
+                        <p v-if="saveQuoteError" class="text-sm font-semibold text-rose-700">{{ saveQuoteError }}</p>
                     </div>
 
                     <div v-else class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">

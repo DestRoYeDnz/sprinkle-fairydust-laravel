@@ -3,11 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Mail\StyledHtmlMail;
 use App\Models\Quote;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 
 class QuoteController extends Controller
 {
@@ -19,6 +20,7 @@ class QuoteController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
+            'anonymous_id' => ['nullable', 'string', 'max:80'],
             'event' => ['nullable', 'string', 'max:255'],
             'date' => ['nullable', 'date'],
             'address' => ['nullable', 'string', 'max:255'],
@@ -53,13 +55,13 @@ class QuoteController extends Controller
             $quote = Quote::query()->create([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
+                'anonymous_id' => $this->sanitizeAnonymousId($validated['anonymous_id'] ?? null),
                 'event_type' => $validated['event'] ?? null,
                 'event_date' => $validated['date'] ?? null,
                 'address' => $validated['address'] ?? null,
                 'start_time' => $validated['start_time'] ?? null,
                 'end_time' => $validated['end_time'] ?? null,
                 'total_hours' => $totalHours,
-                'details' => $validated['details'] ?? null,
             ]);
 
             $this->sendQuoteEmail(
@@ -71,7 +73,7 @@ class QuoteController extends Controller
                 endTime: $quote->end_time,
                 totalHours: $quote->total_hours,
                 address: $quote->address,
-                details: $quote->details,
+                details: $validated['details'] ?? null,
             );
 
             return response()->json([
@@ -87,7 +89,7 @@ class QuoteController extends Controller
     }
 
     /**
-     * Send Brevo notification email when credentials are configured.
+     * Send quote notification email when a recipient is configured.
      */
     private function sendQuoteEmail(
         string $name,
@@ -100,11 +102,10 @@ class QuoteController extends Controller
         ?string $address,
         ?string $details,
     ): void {
-        $apiKey = config('services.sprinkle.brevo_api_key');
-        $fromEmail = config('services.sprinkle.brevo_from_email');
-        $toEmail = config('services.sprinkle.brevo_to_email');
+        $toEmail = config('services.sprinkle.quote_notification_email')
+            ?: 'brettj@dekode.co.nz';
 
-        if (! $apiKey || ! $fromEmail || ! $toEmail) {
+        if (! $toEmail) {
             return;
         }
 
@@ -122,52 +123,49 @@ class QuoteController extends Controller
             urlencode($eventType ?? ''),
         );
 
-        $response = Http::withHeaders([
-            'accept' => 'application/json',
-            'api-key' => $apiKey,
-            'content-type' => 'application/json',
-        ])->post('https://api.brevo.com/v3/smtp/email', [
-            'sender' => [
-                'name' => 'Sprinkle Fairydust',
-                'email' => $fromEmail,
-            ],
-            'to' => [[
-                'email' => $toEmail,
-                'name' => 'Melody',
-            ]],
-            'replyTo' => [
-                'email' => $email,
-                'name' => $name,
-            ],
-            'subject' => sprintf('New Quote Request: %s from %s', $eventType ?: 'Event', $name),
-            'htmlContent' => sprintf(
-                '<h2>New Quote Request ✨</h2>' .
-                    '<p><strong>Name:</strong> %s</p>' .
-                    '<p><strong>Email:</strong> %s</p>' .
-                    '<p><strong>Event Type:</strong> %s</p>' .
-                    '<p><strong>Event Date:</strong> %s</p>' .
-                    '<p><strong>Start Time:</strong> %s</p>' .
-                    '<p><strong>End Time:</strong> %s</p>' .
-                    '<p><strong>Total Hours (rounded):</strong> %s</p>' .
-                    '<p><strong>Address:</strong> %s</p>' .
-                    '<p><strong>Additional Details:</strong></p><p>%s</p>' .
-                    '<hr>' .
-                    '<a href="%s" style="display:inline-block;margin-top:10px;color:#0066ff;">Open Quote Calculator</a>',
-                e($name),
-                e($email),
-                e($eventType ?: '—'),
-                e($date ?: '—'),
-                e($startTime ?: '—'),
-                e($endTime ?: '—'),
-                e($totalHours !== null ? (string) $totalHours : '—'),
-                e($address ?: '—'),
-                nl2br(e($details ?: '—')),
-                e($calculatorLink),
-            ),
-        ]);
+        Mail::to($toEmail, 'Sprinkle Fairydust Admin')->send(
+            (new StyledHtmlMail(
+                sprintf('New Quote Request: %s from %s', $eventType ?: 'Event', $name),
+                sprintf(
+                    '<h2>New Quote Request ✨</h2>'.
+                        '<p><strong>Name:</strong> %s</p>'.
+                        '<p><strong>Email:</strong> %s</p>'.
+                        '<p><strong>Event Type:</strong> %s</p>'.
+                        '<p><strong>Event Date:</strong> %s</p>'.
+                        '<p><strong>Start Time:</strong> %s</p>'.
+                        '<p><strong>End Time:</strong> %s</p>'.
+                        '<p><strong>Total Hours (rounded):</strong> %s</p>'.
+                        '<p><strong>Address:</strong> %s</p>'.
+                        '<p><strong>Additional Details:</strong></p><p>%s</p>'.
+                        '<hr>'.
+                        '<a href="%s" style="display:inline-block;margin-top:10px;color:#0066ff;">Open Quote Calculator</a>',
+                    e($name),
+                    e($email),
+                    e($eventType ?: '—'),
+                    e($date ?: '—'),
+                    e($startTime ?: '—'),
+                    e($endTime ?: '—'),
+                    e($totalHours !== null ? (string) $totalHours : '—'),
+                    e($address ?: '—'),
+                    nl2br(e($details ?: '—')),
+                    e($calculatorLink),
+                ),
+            ))->replyTo($email, $name)
+        );
+    }
 
-        if (! $response->successful()) {
-            throw new \RuntimeException('Brevo API request failed with status '.$response->status());
+    private function sanitizeAnonymousId(?string $anonymousId): ?string
+    {
+        if ($anonymousId === null) {
+            return null;
         }
+
+        $sanitized = preg_replace('/[^A-Za-z0-9\-_]/', '', $anonymousId) ?? '';
+
+        if ($sanitized === '') {
+            return null;
+        }
+
+        return substr($sanitized, 0, 80);
     }
 }

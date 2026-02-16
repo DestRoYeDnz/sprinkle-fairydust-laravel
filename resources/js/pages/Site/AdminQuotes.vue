@@ -11,6 +11,54 @@ defineOptions({
 
 const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 
+function getCsrfToken() {
+    const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (metaToken) {
+        return metaToken;
+    }
+
+    const xsrfCookie = document.cookie
+        .split('; ')
+        .find((row) => row.startsWith('XSRF-TOKEN='))
+        ?.split('=')
+        .slice(1)
+        .join('=');
+
+    return xsrfCookie ? decodeURIComponent(xsrfCookie) : csrfToken;
+}
+
+function jsonHeaders(includeContentType = true) {
+    const token = getCsrfToken();
+    const headers = {
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+    };
+
+    if (includeContentType) {
+        headers['Content-Type'] = 'application/json';
+    }
+
+    if (token) {
+        headers['X-CSRF-TOKEN'] = token;
+        headers['X-XSRF-TOKEN'] = token;
+    }
+
+    return headers;
+}
+
+async function parseJson(response) {
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+        return {};
+    }
+
+    try {
+        return await response.json();
+    } catch {
+        return {};
+    }
+}
+
 const loading = ref(false);
 const loadError = ref('');
 const createError = ref('');
@@ -19,6 +67,7 @@ const creating = ref(false);
 const quotes = ref([]);
 const quotePendingDelete = ref(null);
 const showDeleteDialog = ref(false);
+const showCreateForm = ref(false);
 
 const createForm = ref(emptyQuoteForm());
 
@@ -31,8 +80,14 @@ function emptyQuoteForm() {
         start_time: '',
         end_time: '',
         total_hours: '',
+        calc_payment_type: '',
+        calc_base_amount: '',
+        calc_setup_amount: '',
+        calc_travel_amount: '',
+        calc_subtotal: '',
+        calc_gst_amount: '',
+        calc_total_amount: '',
         address: '',
-        details: '',
     };
 }
 
@@ -63,9 +118,69 @@ function buildPayload(source) {
         start_time: source.start_time || null,
         end_time: source.end_time || null,
         total_hours: totalHours === '' || totalHours === null ? null : Number(totalHours),
+        calc_payment_type: source.calc_payment_type || null,
+        calc_base_amount: toNullableNumber(source.calc_base_amount),
+        calc_setup_amount: toNullableNumber(source.calc_setup_amount),
+        calc_travel_amount: toNullableNumber(source.calc_travel_amount),
+        calc_subtotal: toNullableNumber(source.calc_subtotal),
+        calc_gst_amount: toNullableNumber(source.calc_gst_amount),
+        calc_total_amount: toNullableNumber(source.calc_total_amount),
         address: source.address || null,
-        details: source.details || null,
     };
+}
+
+function toNullableNumber(value) {
+    if (value === '' || value === null || value === undefined) {
+        return null;
+    }
+
+    const number = Number(value);
+
+    return Number.isFinite(number) ? number : null;
+}
+
+function normalizeAmount(value) {
+    if (value === null || value === undefined || value === '') {
+        return null;
+    }
+
+    const number = Number(value);
+
+    return Number.isFinite(number) ? number : null;
+}
+
+function formatCurrency(value) {
+    const amount = normalizeAmount(value);
+
+    if (amount === null) {
+        return '—';
+    }
+
+    return `$${amount.toFixed(2)}`;
+}
+
+function formatPaymentType(value) {
+    if (value === 'hourly') {
+        return 'Organizer-Paid (Hourly)';
+    }
+
+    if (value === 'perface') {
+        return 'Pay Per Face';
+    }
+
+    return '—';
+}
+
+function hasCalculationBreakdown(item) {
+    return [
+        item.calc_payment_type,
+        item.calc_base_amount,
+        item.calc_setup_amount,
+        item.calc_travel_amount,
+        item.calc_subtotal,
+        item.calc_gst_amount,
+        item.calc_total_amount,
+    ].some((value) => value !== null && value !== '');
 }
 
 function formatDateTime(value) {
@@ -74,6 +189,65 @@ function formatDateTime(value) {
     }
 
     return new Date(value).toLocaleString();
+}
+
+function formatEmailSendStatus(item) {
+    if (!item.email_send_status) {
+        return 'Not sent';
+    }
+
+    const status = item.email_send_status === 'sent' ? 'Sent' : item.email_send_status;
+    const attempted = formatDateTime(item.email_send_attempted_at);
+
+    return `${status} (${attempted})`;
+}
+
+function formatConfirmationStatus(item) {
+    if (!item.client_confirmed_at) {
+        return 'Pending confirmation';
+    }
+
+    return `Confirmed at ${formatDateTime(item.client_confirmed_at)}`;
+}
+
+function formatOpenTrackingStatus(item) {
+    if (!item.email_opened_at) {
+        return 'Not opened yet';
+    }
+
+    const count = Number(item.email_open_count ?? 0);
+    const countText = `${count} ${count === 1 ? 'open' : 'opens'}`;
+    const lastOpened = formatDateTime(item.email_last_opened_at || item.email_opened_at);
+
+    return `${countText} (last ${lastOpened})`;
+}
+
+function emailStatusPillClass(item) {
+    if (item.email_send_status === 'sent') {
+        return 'status-pill status-pill--success';
+    }
+
+    if (item.email_send_status === 'failed') {
+        return 'status-pill status-pill--danger';
+    }
+
+    return 'status-pill status-pill--pending';
+}
+
+function openedStatusPillClass(item) {
+    if (item.email_opened_at) {
+        return 'status-pill status-pill--success';
+    }
+
+    return 'status-pill status-pill--pending';
+}
+
+function confirmedStatusPillClass(item) {
+    if (item.client_confirmed_at) {
+        return 'status-pill status-pill--success';
+    }
+
+    return 'status-pill status-pill--pending';
 }
 
 function calculatorUrl(source) {
@@ -116,13 +290,26 @@ function calculatorUrl(source) {
 function applyQuoteData(item, quote) {
     item.name = quote.name ?? '';
     item.email = quote.email ?? '';
+    item.anonymous_id = quote.anonymous_id ?? '';
     item.event_type = quote.event_type ?? '';
     item.event_date = normalizeDate(quote.event_date);
     item.start_time = normalizeTime(quote.start_time);
     item.end_time = normalizeTime(quote.end_time);
     item.total_hours = quote.total_hours ?? '';
+    item.calc_payment_type = quote.calc_payment_type ?? '';
+    item.calc_base_amount = normalizeAmount(quote.calc_base_amount);
+    item.calc_setup_amount = normalizeAmount(quote.calc_setup_amount);
+    item.calc_travel_amount = normalizeAmount(quote.calc_travel_amount);
+    item.calc_subtotal = normalizeAmount(quote.calc_subtotal);
+    item.calc_gst_amount = normalizeAmount(quote.calc_gst_amount);
+    item.calc_total_amount = normalizeAmount(quote.calc_total_amount);
     item.address = quote.address ?? '';
-    item.details = quote.details ?? '';
+    item.email_send_status = quote.email_send_status ?? '';
+    item.email_send_attempted_at = quote.email_send_attempted_at ?? null;
+    item.client_confirmed_at = quote.client_confirmed_at ?? null;
+    item.email_opened_at = quote.email_opened_at ?? null;
+    item.email_last_opened_at = quote.email_last_opened_at ?? null;
+    item.email_open_count = Number(quote.email_open_count ?? 0);
     item.created_at = quote.created_at ?? item.created_at;
     item.updated_at = quote.updated_at ?? item.updated_at;
 }
@@ -132,18 +319,34 @@ function normalizeQuote(quote) {
         id: quote.id,
         name: quote.name ?? '',
         email: quote.email ?? '',
+        anonymous_id: quote.anonymous_id ?? '',
         event_type: quote.event_type ?? '',
         event_date: normalizeDate(quote.event_date),
         start_time: normalizeTime(quote.start_time),
         end_time: normalizeTime(quote.end_time),
         total_hours: quote.total_hours ?? '',
+        calc_payment_type: quote.calc_payment_type ?? '',
+        calc_base_amount: normalizeAmount(quote.calc_base_amount),
+        calc_setup_amount: normalizeAmount(quote.calc_setup_amount),
+        calc_travel_amount: normalizeAmount(quote.calc_travel_amount),
+        calc_subtotal: normalizeAmount(quote.calc_subtotal),
+        calc_gst_amount: normalizeAmount(quote.calc_gst_amount),
+        calc_total_amount: normalizeAmount(quote.calc_total_amount),
         address: quote.address ?? '',
-        details: quote.details ?? '',
+        email_send_status: quote.email_send_status ?? '',
+        email_send_attempted_at: quote.email_send_attempted_at ?? null,
+        client_confirmed_at: quote.client_confirmed_at ?? null,
+        email_opened_at: quote.email_opened_at ?? null,
+        email_last_opened_at: quote.email_last_opened_at ?? null,
+        email_open_count: Number(quote.email_open_count ?? 0),
         created_at: quote.created_at ?? null,
         updated_at: quote.updated_at ?? null,
         _editing: false,
         _saving: false,
+        _sending_email: false,
         _error: '',
+        _email_success: '',
+        _email_error: '',
         _draft: {
             name: quote.name ?? '',
             email: quote.email ?? '',
@@ -152,8 +355,14 @@ function normalizeQuote(quote) {
             start_time: normalizeTime(quote.start_time),
             end_time: normalizeTime(quote.end_time),
             total_hours: quote.total_hours ?? '',
+            calc_payment_type: quote.calc_payment_type ?? '',
+            calc_base_amount: normalizeAmount(quote.calc_base_amount),
+            calc_setup_amount: normalizeAmount(quote.calc_setup_amount),
+            calc_travel_amount: normalizeAmount(quote.calc_travel_amount),
+            calc_subtotal: normalizeAmount(quote.calc_subtotal),
+            calc_gst_amount: normalizeAmount(quote.calc_gst_amount),
+            calc_total_amount: normalizeAmount(quote.calc_total_amount),
             address: quote.address ?? '',
-            details: quote.details ?? '',
         },
     };
 }
@@ -167,8 +376,14 @@ function startEdit(item) {
         start_time: item.start_time,
         end_time: item.end_time,
         total_hours: item.total_hours,
+        calc_payment_type: item.calc_payment_type,
+        calc_base_amount: item.calc_base_amount,
+        calc_setup_amount: item.calc_setup_amount,
+        calc_travel_amount: item.calc_travel_amount,
+        calc_subtotal: item.calc_subtotal,
+        calc_gst_amount: item.calc_gst_amount,
+        calc_total_amount: item.calc_total_amount,
         address: item.address,
-        details: item.details,
     };
 
     item._error = '';
@@ -191,7 +406,7 @@ async function loadQuotes() {
             },
         });
 
-        const data = await response.json();
+        const data = await parseJson(response);
 
         if (!response.ok) {
             loadError.value = data.message || data.error || 'Failed to load quotes';
@@ -214,18 +429,17 @@ async function createQuote() {
     try {
         const response = await fetch('/admin/quotes', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-            },
+            credentials: 'same-origin',
+            headers: jsonHeaders(),
             body: JSON.stringify(buildPayload(createForm.value)),
         });
 
-        const data = await response.json();
+        const data = await parseJson(response);
 
         if (!response.ok) {
-            createError.value = data.message || data.error || 'Failed to create quote';
+            createError.value = response.status === 419
+                ? 'Session expired. Refresh and try again.'
+                : data.message || data.error || 'Failed to create quote';
             return;
         }
 
@@ -249,18 +463,17 @@ async function saveQuote(item) {
     try {
         const response = await fetch(`/admin/quotes/${item.id}`, {
             method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-            },
+            credentials: 'same-origin',
+            headers: jsonHeaders(),
             body: JSON.stringify(buildPayload(item._draft)),
         });
 
-        const data = await response.json();
+        const data = await parseJson(response);
 
         if (!response.ok) {
-            item._error = data.message || data.error || 'Failed to update quote';
+            item._error = response.status === 419
+                ? 'Session expired. Refresh and try again.'
+                : data.message || data.error || 'Failed to update quote';
             return;
         }
 
@@ -273,6 +486,38 @@ async function saveQuote(item) {
         item._error = 'Failed to update quote';
     } finally {
         item._saving = false;
+    }
+}
+
+async function sendQuoteEmail(item) {
+    item._sending_email = true;
+    item._email_success = '';
+    item._email_error = '';
+
+    try {
+        const response = await fetch(`/admin/quotes/${item.id}/send-email`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: jsonHeaders(),
+            body: JSON.stringify({
+                _token: getCsrfToken(),
+            }),
+        });
+
+        const data = await parseJson(response);
+
+        if (!response.ok || !data.success) {
+            item._email_error = response.status === 419
+                ? 'Session expired. Refresh and try again.'
+                : data.message || data.error || 'Failed to send quote email';
+            return;
+        }
+
+        item._email_success = data.message || 'Quote email sent successfully.';
+    } catch {
+        item._email_error = 'Failed to send quote email';
+    } finally {
+        item._sending_email = false;
     }
 }
 
@@ -294,16 +539,16 @@ async function deleteQuote() {
     try {
         const response = await fetch(`/admin/quotes/${item.id}`, {
             method: 'DELETE',
-            headers: {
-                Accept: 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-            },
+            credentials: 'same-origin',
+            headers: jsonHeaders(false),
         });
 
-        const data = await response.json();
+        const data = await parseJson(response);
 
         if (!response.ok || !data.success) {
-            item._error = data.message || data.error || 'Failed to delete quote';
+            item._error = response.status === 419
+                ? 'Session expired. Refresh and try again.'
+                : data.message || data.error || 'Failed to delete quote';
             return;
         }
 
@@ -332,9 +577,18 @@ onMounted(() => {
             <AdminMenu />
 
             <section class="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-md">
-                <h2 class="mb-4 text-2xl font-semibold text-sky-900">Add Quote</h2>
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <h2 class="text-2xl font-semibold text-sky-900">Add Quote</h2>
+                    <button class="secondary-btn" type="button" @click="showCreateForm = !showCreateForm">
+                        {{ showCreateForm ? 'Hide Form' : 'Show Form' }}
+                    </button>
+                </div>
 
-                <form class="space-y-4" @submit.prevent="createQuote">
+                <p v-if="!showCreateForm" class="text-sm text-slate-600">
+                    Form is minimized by default. Select "Show Form" to add a quote.
+                </p>
+
+                <form v-else class="space-y-4" @submit.prevent="createQuote">
                     <div class="grid gap-4 md:grid-cols-2">
                         <label class="field-label">Name
                             <input v-model="createForm.name" type="text" class="input" required />
@@ -371,10 +625,6 @@ onMounted(() => {
 
                     <label class="field-label">Address
                         <input v-model="createForm.address" type="text" class="input" />
-                    </label>
-
-                    <label class="field-label">Details
-                        <textarea v-model="createForm.details" rows="3" class="input"></textarea>
                     </label>
 
                     <button class="primary-btn" :disabled="creating">
@@ -439,10 +689,6 @@ onMounted(() => {
                                 <input v-model="quote._draft.address" type="text" class="input" />
                             </label>
 
-                            <label class="field-label">Details
-                                <textarea v-model="quote._draft.details" rows="3" class="input"></textarea>
-                            </label>
-
                             <div class="flex flex-wrap gap-2">
                                 <button class="primary-btn" :disabled="quote._saving" @click="saveQuote(quote)">
                                     {{ quote._saving ? 'Saving...' : 'Save' }}
@@ -459,22 +705,49 @@ onMounted(() => {
                         <div v-else class="space-y-1 text-sm text-slate-700">
                             <p><strong>Name:</strong> {{ quote.name }}</p>
                             <p><strong>Email:</strong> {{ quote.email }}</p>
+                            <p><strong>Anonymous ID:</strong> {{ quote.anonymous_id || '—' }}</p>
                             <p><strong>Event Type:</strong> {{ quote.event_type || '—' }}</p>
                             <p><strong>Event Date:</strong> {{ quote.event_date || '—' }}</p>
                             <p><strong>Start:</strong> {{ quote.start_time || '—' }}</p>
                             <p><strong>End:</strong> {{ quote.end_time || '—' }}</p>
                             <p><strong>Total Hours:</strong> {{ quote.total_hours ?? '—' }}</p>
+                            <div v-if="hasCalculationBreakdown(quote)" class="mt-2 rounded-lg border border-slate-200 bg-white p-3">
+                                <p class="mb-1 text-xs font-semibold tracking-[0.12em] text-slate-500 uppercase">Calculation</p>
+                                <p><strong>Payment Type:</strong> {{ formatPaymentType(quote.calc_payment_type) }}</p>
+                                <p><strong>Base:</strong> {{ formatCurrency(quote.calc_base_amount) }}</p>
+                                <p><strong>Setup:</strong> {{ formatCurrency(quote.calc_setup_amount) }}</p>
+                                <p><strong>Travel:</strong> {{ formatCurrency(quote.calc_travel_amount) }}</p>
+                                <p><strong>Subtotal:</strong> {{ formatCurrency(quote.calc_subtotal) }}</p>
+                                <p><strong>GST:</strong> {{ formatCurrency(quote.calc_gst_amount) }}</p>
+                                <p><strong>Total:</strong> {{ formatCurrency(quote.calc_total_amount) }}</p>
+                            </div>
                             <p><strong>Address:</strong> {{ quote.address || '—' }}</p>
-                            <p><strong>Details:</strong> {{ quote.details || '—' }}</p>
+                            <p class="status-line">
+                                <strong>Email Status:</strong>
+                                <span :class="emailStatusPillClass(quote)">{{ formatEmailSendStatus(quote) }}</span>
+                            </p>
+                            <p class="status-line">
+                                <strong>Opened:</strong>
+                                <span :class="openedStatusPillClass(quote)">{{ formatOpenTrackingStatus(quote) }}</span>
+                            </p>
+                            <p class="status-line">
+                                <strong>Confirmed:</strong>
+                                <span :class="confirmedStatusPillClass(quote)">{{ formatConfirmationStatus(quote) }}</span>
+                            </p>
 
                             <div class="mt-3 flex flex-wrap gap-2">
                                 <Link class="primary-btn" :href="calculatorUrl(quote)">Calculate</Link>
+                                <button class="primary-btn" :disabled="quote._sending_email" @click="sendQuoteEmail(quote)">
+                                    {{ quote._sending_email ? 'Sending...' : 'Send Quote Email' }}
+                                </button>
                                 <button class="secondary-btn" @click="startEdit(quote)">Edit</button>
                                 <button class="danger-btn" :disabled="quote._saving" @click="requestDeleteQuote(quote)">Delete</button>
                             </div>
                         </div>
 
                         <p v-if="quote._error" class="mt-2 text-sm font-semibold text-rose-700">{{ quote._error }}</p>
+                        <p v-if="quote._email_success" class="mt-2 text-sm font-semibold text-emerald-700">{{ quote._email_success }}</p>
+                        <p v-if="quote._email_error" class="mt-2 text-sm font-semibold text-rose-700">{{ quote._email_error }}</p>
                     </article>
                 </div>
             </section>
@@ -576,5 +849,41 @@ onMounted(() => {
 .danger-btn:hover {
     background: #ffe4e6;
     border-color: #fda4af;
+}
+
+.status-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 9999px;
+    border: 1px solid transparent;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.status-pill--success {
+    border-color: #86efac;
+    background: #f0fdf4;
+    color: #166534;
+}
+
+.status-pill--pending {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+    color: #334155;
+}
+
+.status-pill--danger {
+    border-color: #fda4af;
+    background: #fff1f2;
+    color: #9f1239;
 }
 </style>

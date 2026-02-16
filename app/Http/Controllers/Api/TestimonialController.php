@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Mail\StyledHtmlMail;
 use App\Models\Testimonial;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 
 class TestimonialController extends Controller
@@ -53,6 +55,8 @@ class TestimonialController extends Controller
             'approved_at' => null,
         ]);
 
+        $this->sendNotificationEmail($testimonial);
+
         return response()->json([
             'success' => true,
             'message' => 'Thanks! Your testimonial was submitted and is waiting for admin approval.',
@@ -75,5 +79,36 @@ class TestimonialController extends Controller
             'success' => true,
             'url' => Storage::url($path),
         ]);
+    }
+
+    private function sendNotificationEmail(Testimonial $testimonial): void
+    {
+        $toEmail = config('services.sprinkle.testimonial_notification_email')
+            ?: config('services.sprinkle.quote_notification_email')
+            ?: 'brettj@dekode.co.nz';
+
+        if (! $toEmail) {
+            return;
+        }
+
+        $links = collect($testimonial->urls ?? [])
+            ->map(fn (?string $url): string => $url ? '<li><a href="'.e($url).'">'.e($url).'</a></li>' : '')
+            ->filter()
+            ->implode('');
+
+        $linksHtml = $links !== '' ? "<ul>{$links}</ul>" : '<p>—</p>';
+
+        Mail::to($toEmail, 'Sprinkle Fairydust Admin')->send(new StyledHtmlMail(
+            sprintf('New Testimonial Submission from %s', $testimonial->name),
+            sprintf(
+                '<h2>New Testimonial Submission ✨</h2>'.
+                    '<p><strong>Name:</strong> %s</p>'.
+                    '<p><strong>Testimonial:</strong></p><p>%s</p>'.
+                    '<p><strong>Images:</strong></p>%s',
+                e($testimonial->name),
+                nl2br(e($testimonial->testimonial)),
+                $linksHtml,
+            ),
+        ));
     }
 }

@@ -72,7 +72,7 @@ it('allows admin users to update calculator settings', function () {
     expect($setting)->not->toBeNull();
     expect(data_get($setting?->value, 'artist.name'))->toBe('Sprinkle Team');
     expect(data_get($setting?->value, 'form.travelType'))->toBe('flat');
-    expect(data_get($setting?->value, 'form.flatTravel'))->toBe(40.0);
+    expect(data_get($setting?->value, 'form.flatTravel'))->toBe(40);
 });
 
 it('forbids non-admin users from calculator settings endpoints', function () {
@@ -88,4 +88,3 @@ it('forbids non-admin users from calculator settings endpoints', function () {
         ->putJson(route('admin.settings.calculator.update'), CalculatorSettings::defaults())
         ->assertForbidden();
 });
-

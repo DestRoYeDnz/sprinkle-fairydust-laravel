@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\GalleryImageController;
+use App\Http\Controllers\Api\PageViewTrackingController;
 use App\Http\Controllers\Api\QuoteController;
 use App\Http\Controllers\Api\TestimonialController;
 use Illuminate\Support\Facades\Route;
@@ -14,3 +15,4 @@ Route::post('testimonials', [TestimonialController::class, 'store']);
 Route::post('testimonials/upload-image', [TestimonialController::class, 'uploadImage']);
 
 Route::post('quotes', [QuoteController::class, 'store']);
+Route::post('tracking/page-views', [PageViewTrackingController::class, 'store']);

@@ -8,40 +8,50 @@ defineOptions({
     layout: SprinkleLayout,
 });
 
-const performanceNoteSentence =
-    'Last event I did about 90 paints in 4 hours — that’s 2.7 minutes per face (including mirror time and getting on/off the chair), or about 22.5 faces per hour. On average, face painters aim for around 12 per hour.';
+const settingsLoading = ref(false);
+const settingsError = ref('');
 
-const artist = ref({
-    name: 'Melody',
-    email: 'info@sprinklefairydust.co.nz',
-    website: 'https://www.facebook.com/melfairysfacepainting/',
-    mobile: '021 555 3921',
-});
+function defaultCalculatorSettings() {
+    return {
+        performance_note_sentence:
+            'Last event I did about 90 paints in 4 hours — that’s 2.7 minutes per face (including mirror time and getting on/off the chair), or about 22.5 faces per hour. On average, face painters aim for around 12 per hour.',
+        artist: {
+            name: 'Melody',
+            email: 'info@sprinklefairydust.co.nz',
+            website: 'https://www.facebook.com/melfairysfacepainting/',
+            mobile: '021 555 3921',
+        },
+        form: {
+            organizerName: '',
+            organizerEmail: '',
+            eventName: '',
+            eventDate: '',
+            startTime: '',
+            endTime: '',
+            paymentType: 'hourly',
+            rate: 120,
+            hours: 8,
+            pricePerFace: 10,
+            numFaces: 30,
+            includeSetup: false,
+            setupRate: 60,
+            setupHours: 2,
+            travelType: 'perkm',
+            distance: 20,
+            travelRate: 0.85,
+            flatTravel: 0,
+            includePerformance: false,
+            perfFaces: 90,
+            perfHours: 4,
+            includeGST: true,
+        },
+    };
+}
 
-const form = ref({
-    organizerName: '',
-    organizerEmail: '',
-    eventName: '',
-    eventDate: '',
-    startTime: '',
-    endTime: '',
-    paymentType: 'hourly',
-    rate: 120,
-    hours: 8,
-    pricePerFace: 10,
-    numFaces: 30,
-    includeSetup: false,
-    setupRate: 60,
-    setupHours: 2,
-    travelType: 'perkm',
-    distance: 20,
-    travelRate: 0.85,
-    flatTravel: 0,
-    includePerformance: false,
-    perfFaces: 90,
-    perfHours: 4,
-    includeGST: true,
-});
+const defaults = defaultCalculatorSettings();
+const performanceNoteSentence = ref(defaults.performance_note_sentence);
+const artist = ref({ ...defaults.artist });
+const form = ref({ ...defaults.form });
 
 const showResult = ref(false);
 const notification = ref('');
@@ -62,6 +72,86 @@ const result = ref({
 function toNumber(value) {
     const number = Number(value);
     return Number.isFinite(number) ? number : 0;
+}
+
+function normalizeCalculatorSettings(source) {
+    const payload = source && typeof source === 'object' ? source : {};
+    const payloadArtist = payload.artist && typeof payload.artist === 'object' ? payload.artist : {};
+    const payloadForm = payload.form && typeof payload.form === 'object' ? payload.form : {};
+
+    return {
+        performance_note_sentence: String(payload.performance_note_sentence ?? defaults.performance_note_sentence),
+        artist: {
+            name: String(payloadArtist.name ?? defaults.artist.name),
+            email: String(payloadArtist.email ?? defaults.artist.email),
+            website: String(payloadArtist.website ?? defaults.artist.website),
+            mobile: String(payloadArtist.mobile ?? defaults.artist.mobile),
+        },
+        form: {
+            organizerName: String(payloadForm.organizerName ?? defaults.form.organizerName),
+            organizerEmail: String(payloadForm.organizerEmail ?? defaults.form.organizerEmail),
+            eventName: String(payloadForm.eventName ?? defaults.form.eventName),
+            eventDate: String(payloadForm.eventDate ?? defaults.form.eventDate),
+            startTime: String(payloadForm.startTime ?? defaults.form.startTime),
+            endTime: String(payloadForm.endTime ?? defaults.form.endTime),
+            paymentType: ['hourly', 'perface'].includes(String(payloadForm.paymentType))
+                ? String(payloadForm.paymentType)
+                : defaults.form.paymentType,
+            rate: toNumber(payloadForm.rate ?? defaults.form.rate),
+            hours: toNumber(payloadForm.hours ?? defaults.form.hours),
+            pricePerFace: toNumber(payloadForm.pricePerFace ?? defaults.form.pricePerFace),
+            numFaces: toNumber(payloadForm.numFaces ?? defaults.form.numFaces),
+            includeSetup: Boolean(payloadForm.includeSetup ?? defaults.form.includeSetup),
+            setupRate: toNumber(payloadForm.setupRate ?? defaults.form.setupRate),
+            setupHours: toNumber(payloadForm.setupHours ?? defaults.form.setupHours),
+            travelType: ['perkm', 'flat'].includes(String(payloadForm.travelType))
+                ? String(payloadForm.travelType)
+                : defaults.form.travelType,
+            distance: toNumber(payloadForm.distance ?? defaults.form.distance),
+            travelRate: toNumber(payloadForm.travelRate ?? defaults.form.travelRate),
+            flatTravel: toNumber(payloadForm.flatTravel ?? defaults.form.flatTravel),
+            includePerformance: Boolean(payloadForm.includePerformance ?? defaults.form.includePerformance),
+            perfFaces: toNumber(payloadForm.perfFaces ?? defaults.form.perfFaces),
+            perfHours: toNumber(payloadForm.perfHours ?? defaults.form.perfHours),
+            includeGST: Boolean(payloadForm.includeGST ?? defaults.form.includeGST),
+        },
+    };
+}
+
+function applyCalculatorSettings(source) {
+    const settings = normalizeCalculatorSettings(source);
+
+    performanceNoteSentence.value = settings.performance_note_sentence;
+    artist.value = settings.artist;
+    form.value = settings.form;
+}
+
+async function loadCalculatorSettings() {
+    settingsLoading.value = true;
+    settingsError.value = '';
+
+    try {
+        const response = await fetch('/admin/settings/calculator', {
+            headers: {
+                Accept: 'application/json',
+            },
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            settingsError.value = data.message || data.error || 'Failed to load calculator defaults.';
+            applyCalculatorSettings(defaults);
+            return;
+        }
+
+        applyCalculatorSettings(data);
+    } catch {
+        settingsError.value = 'Failed to load calculator defaults.';
+        applyCalculatorSettings(defaults);
+    } finally {
+        settingsLoading.value = false;
+    }
 }
 
 function applyQueryParams() {
@@ -228,7 +318,7 @@ const quoteText = computed(() => {
     if (form.value.includePerformance) {
         lines.push('');
         lines.push('Performance Note:');
-        lines.push(performanceNoteSentence);
+        lines.push(performanceNoteSentence.value);
     }
 
     return ['Sprinkle Fairydust Face Painting Quote', '', ...lines].join('\n');
@@ -261,7 +351,8 @@ function resetForm() {
     window.location.reload();
 }
 
-onMounted(() => {
+onMounted(async () => {
+    await loadCalculatorSettings();
     applyQueryParams();
 });
 </script>
@@ -275,6 +366,8 @@ onMounted(() => {
             <p class="mb-8 text-center text-slate-600">Create quotes quickly for incoming event requests.</p>
 
             <AdminMenu />
+            <p v-if="settingsLoading" class="mb-5 text-sm font-semibold text-slate-600">Loading calculator defaults...</p>
+            <p v-if="settingsError" class="mb-5 text-sm font-semibold text-rose-700">{{ settingsError }}</p>
 
             <div class="grid gap-6 lg:grid-cols-[1.45fr_1fr]">
                 <section class="panel">

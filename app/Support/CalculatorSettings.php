@@ -68,9 +68,9 @@ class CalculatorSettings
             'form.organizerName' => ['nullable', 'string', 'max:255'],
             'form.organizerEmail' => ['nullable', 'string', 'max:255'],
             'form.eventName' => ['nullable', 'string', 'max:255'],
-            'form.eventDate' => ['nullable', 'date'],
-            'form.startTime' => ['nullable', 'date_format:H:i'],
-            'form.endTime' => ['nullable', 'date_format:H:i'],
+            'form.eventDate' => ['nullable', 'string', 'max:64'],
+            'form.startTime' => ['nullable', 'string', 'max:16'],
+            'form.endTime' => ['nullable', 'string', 'max:16'],
             'form.paymentType' => ['required', Rule::in(['hourly', 'perface'])],
             'form.rate' => ['required', 'numeric', 'min:0'],
             'form.hours' => ['required', 'numeric', 'min:0'],
@@ -146,4 +146,3 @@ class CalculatorSettings
         ];
     }
 }
-

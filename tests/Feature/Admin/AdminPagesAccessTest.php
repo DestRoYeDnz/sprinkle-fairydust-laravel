@@ -15,6 +15,7 @@ it('allows admin users to access all admin pages', function () {
         'admin.testimonials',
         'admin.users.create',
         'admin.calculator',
+        'admin.settings',
     ];
 
     foreach ($routes as $route) {
@@ -37,6 +38,7 @@ it('forbids non-admin users from all admin pages', function () {
         'admin.testimonials',
         'admin.users.create',
         'admin.calculator',
+        'admin.settings',
     ];
 
     foreach ($routes as $route) {

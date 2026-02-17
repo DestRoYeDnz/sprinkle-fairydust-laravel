@@ -1,49 +1,17 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3';
-import { onMounted, ref } from 'vue';
+import { nextTick, onMounted, ref, watch } from 'vue';
 import AdminMenu from '@/components/admin/AdminMenu.vue';
 import ConfirmDialog from '@/components/admin/ConfirmDialog.vue';
+import { csrfHeaders, fetchWithCsrfRetry, withCsrfToken } from '@/lib/csrf';
 import SprinkleLayout from '../../layouts/SprinkleLayout.vue';
 
 defineOptions({
     layout: SprinkleLayout,
 });
 
-const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
-
-function getCsrfToken() {
-    const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-    if (metaToken) {
-        return metaToken;
-    }
-
-    const xsrfCookie = document.cookie
-        .split('; ')
-        .find((row) => row.startsWith('XSRF-TOKEN='))
-        ?.split('=')
-        .slice(1)
-        .join('=');
-
-    return xsrfCookie ? decodeURIComponent(xsrfCookie) : csrfToken;
-}
-
 function jsonHeaders(includeContentType = true) {
-    const token = getCsrfToken();
-    const headers = {
-        Accept: 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-    };
-
-    if (includeContentType) {
-        headers['Content-Type'] = 'application/json';
-    }
-
-    if (token) {
-        headers['X-CSRF-TOKEN'] = token;
-        headers['X-XSRF-TOKEN'] = token;
-    }
-
-    return headers;
+    return csrfHeaders(includeContentType);
 }
 
 async function parseJson(response) {
@@ -68,6 +36,12 @@ const quotes = ref([]);
 const quotePendingDelete = ref(null);
 const showDeleteDialog = ref(false);
 const showCreateForm = ref(false);
+const quotePendingDecline = ref(null);
+const showDeclineDialog = ref(false);
+const declineReasonInput = ref('');
+const declineDialogRef = ref(null);
+const defaultDeclineReason = 'Requested time does not suit our availability. Please reply with another preferred time.';
+const focusQuoteId = ref('');
 
 const createForm = ref(emptyQuoteForm());
 
@@ -230,6 +204,10 @@ function formatPaymentType(value) {
         return 'Pay Per Face';
     }
 
+    if (value === 'package') {
+        return 'Package';
+    }
+
     return '—';
 }
 
@@ -251,6 +229,69 @@ function formatVenueType(value) {
     }
 
     return value || '—';
+}
+
+function parsedAddOnsFromQuote(item) {
+    const services = Array.isArray(item?.services_requested) ? item.services_requested : [];
+
+    return services
+        .map((service) => String(service ?? '').trim())
+        .map((service) => {
+            const match = service.match(/^add-on:\s*(.+)$/i);
+
+            if (!match) {
+                return null;
+            }
+
+            const content = String(match[1] ?? '').trim();
+            const amountMatch = content.match(/^(.*)\s+\(\$(\d+(?:\.\d{1,2})?)\)\s*$/);
+
+            if (amountMatch) {
+                return {
+                    name: String(amountMatch[1] ?? '').trim(),
+                    amount: Number(amountMatch[2]),
+                };
+            }
+
+            return {
+                name: content,
+                amount: null,
+            };
+        })
+        .filter((addOn) => addOn && addOn.name);
+}
+
+function formatAddOnBreakdown(item) {
+    const addOns = parsedAddOnsFromQuote(item);
+
+    if (!addOns.length) {
+        return '—';
+    }
+
+    return addOns.map((addOn) => addOn.name).join(', ');
+}
+
+function addOnTotalAmount(item) {
+    const addOns = parsedAddOnsFromQuote(item);
+    const amounts = addOns
+        .map((addOn) => addOn.amount)
+        .filter((value) => value !== null && Number.isFinite(value));
+
+    if (!amounts.length) {
+        return null;
+    }
+
+    return amounts.reduce((sum, amount) => sum + Number(amount), 0);
+}
+
+function hasAddOnBreakdown(item) {
+    return parsedAddOnsFromQuote(item).length > 0;
+}
+
+function shouldShowGst(item) {
+    const gstAmount = normalizeAmount(item?.calc_gst_amount);
+
+    return gstAmount !== null && gstAmount > 0;
 }
 
 function hasCalculationBreakdown(item) {
@@ -285,6 +326,17 @@ function formatEmailSendStatus(item) {
 }
 
 function formatConfirmationStatus(item) {
+    if (item.client_suggested_time_at) {
+        return `New time suggested at ${formatDateTime(item.client_suggested_time_at)}`;
+    }
+
+    if (item.artist_declined_at) {
+        const declinedAt = formatDateTime(item.artist_declined_at);
+        const reason = item.artist_decline_reason ? ` (${item.artist_decline_reason})` : '';
+
+        return `Declined at ${declinedAt}${reason}`;
+    }
+
     if (!item.client_confirmed_at) {
         return 'Pending confirmation';
     }
@@ -329,11 +381,23 @@ function confirmedStatusPillClass(item) {
         return 'status-pill status-pill--success';
     }
 
+    if (item.client_suggested_time_at) {
+        return 'status-pill status-pill--pending';
+    }
+
+    if (item.artist_declined_at) {
+        return 'status-pill status-pill--danger';
+    }
+
     return 'status-pill status-pill--pending';
 }
 
 function calculatorUrl(source) {
     const params = new URLSearchParams();
+
+    if (source.id !== '' && source.id !== null && source.id !== undefined) {
+        params.set('quote_id', String(source.id));
+    }
 
     if (source.name) {
         params.set('name', source.name);
@@ -345,6 +409,10 @@ function calculatorUrl(source) {
 
     if (source.event_type) {
         params.set('event', source.event_type);
+    }
+
+    if (source.calc_payment_type) {
+        params.set('type', source.calc_payment_type);
     }
 
     if (source.event_date) {
@@ -435,6 +503,13 @@ function applyQuoteData(item, quote) {
     item.email_send_status = quote.email_send_status ?? '';
     item.email_send_attempted_at = quote.email_send_attempted_at ?? null;
     item.client_confirmed_at = quote.client_confirmed_at ?? null;
+    item.artist_declined_at = quote.artist_declined_at ?? null;
+    item.artist_decline_reason = quote.artist_decline_reason ?? '';
+    item.client_suggested_time_at = quote.client_suggested_time_at ?? null;
+    item.client_suggested_event_date = normalizeDate(quote.client_suggested_event_date);
+    item.client_suggested_start_time = normalizeTime(quote.client_suggested_start_time);
+    item.client_suggested_end_time = normalizeTime(quote.client_suggested_end_time);
+    item.client_suggested_time_notes = quote.client_suggested_time_notes ?? '';
     item.email_opened_at = quote.email_opened_at ?? null;
     item.email_last_opened_at = quote.email_last_opened_at ?? null;
     item.email_open_count = Number(quote.email_open_count ?? 0);
@@ -475,6 +550,13 @@ function normalizeQuote(quote) {
         email_send_status: quote.email_send_status ?? '',
         email_send_attempted_at: quote.email_send_attempted_at ?? null,
         client_confirmed_at: quote.client_confirmed_at ?? null,
+        artist_declined_at: quote.artist_declined_at ?? null,
+        artist_decline_reason: quote.artist_decline_reason ?? '',
+        client_suggested_time_at: quote.client_suggested_time_at ?? null,
+        client_suggested_event_date: normalizeDate(quote.client_suggested_event_date),
+        client_suggested_start_time: normalizeTime(quote.client_suggested_start_time),
+        client_suggested_end_time: normalizeTime(quote.client_suggested_end_time),
+        client_suggested_time_notes: quote.client_suggested_time_notes ?? '',
         email_opened_at: quote.email_opened_at ?? null,
         email_last_opened_at: quote.email_last_opened_at ?? null,
         email_open_count: Number(quote.email_open_count ?? 0),
@@ -483,9 +565,12 @@ function normalizeQuote(quote) {
         _editing: false,
         _saving: false,
         _sending_email: false,
+        _declining: false,
         _error: '',
         _email_success: '',
         _email_error: '',
+        _decline_success: '',
+        _decline_error: '',
         _draft: {
             name: quote.name ?? '',
             email: quote.email ?? '',
@@ -571,11 +656,48 @@ async function loadQuotes() {
         }
 
         quotes.value = Array.isArray(data) ? data.map(normalizeQuote) : [];
+        await nextTick();
+        scrollToFocusedQuote();
     } catch {
         loadError.value = 'Failed to load quotes';
     } finally {
         loading.value = false;
     }
+}
+
+function initializeFocusedQuoteFromQuery() {
+    const params = new URLSearchParams(window.location.search);
+    const requestedQuoteId = String(params.get('quote_id') ?? '').trim();
+    const hashQuoteId = window.location.hash.startsWith('#quote-')
+        ? window.location.hash.replace('#quote-', '').trim()
+        : '';
+
+    focusQuoteId.value = requestedQuoteId || hashQuoteId;
+}
+
+function scrollToFocusedQuote(attempt = 0) {
+    if (!focusQuoteId.value) {
+        return;
+    }
+
+    const target = document.getElementById(`quote-${focusQuoteId.value}`);
+
+    if (!target) {
+        if (attempt < 5) {
+            window.setTimeout(() => {
+                scrollToFocusedQuote(attempt + 1);
+            }, 120);
+        }
+
+        return;
+    }
+
+    const scrollTop = Math.max(target.getBoundingClientRect().top + window.scrollY - 92, 0);
+
+    window.scrollTo({
+        top: scrollTop,
+        behavior: 'smooth',
+    });
 }
 
 async function createQuote() {
@@ -584,11 +706,11 @@ async function createQuote() {
     createSuccess.value = '';
 
     try {
-        const response = await fetch('/admin/quotes', {
+        const response = await fetchWithCsrfRetry('/admin/quotes', {
             method: 'POST',
             credentials: 'same-origin',
             headers: jsonHeaders(),
-            body: JSON.stringify(buildPayload(createForm.value)),
+            body: JSON.stringify(withCsrfToken(buildPayload(createForm.value))),
         });
 
         const data = await parseJson(response);
@@ -618,11 +740,11 @@ async function saveQuote(item) {
     item._error = '';
 
     try {
-        const response = await fetch(`/admin/quotes/${item.id}`, {
+        const response = await fetchWithCsrfRetry(`/admin/quotes/${item.id}`, {
             method: 'PUT',
             credentials: 'same-origin',
             headers: jsonHeaders(),
-            body: JSON.stringify(buildPayload(item._draft)),
+            body: JSON.stringify(withCsrfToken(buildPayload(item._draft))),
         });
 
         const data = await parseJson(response);
@@ -652,13 +774,11 @@ async function sendQuoteEmail(item) {
     item._email_error = '';
 
     try {
-        const response = await fetch(`/admin/quotes/${item.id}/send-email`, {
+        const response = await fetchWithCsrfRetry(`/admin/quotes/${item.id}/send-email`, {
             method: 'POST',
             credentials: 'same-origin',
             headers: jsonHeaders(),
-            body: JSON.stringify({
-                _token: getCsrfToken(),
-            }),
+            body: JSON.stringify(withCsrfToken({})),
         });
 
         const data = await parseJson(response);
@@ -678,6 +798,103 @@ async function sendQuoteEmail(item) {
     }
 }
 
+function requestDeclineQuote(item) {
+    if (item.client_confirmed_at) {
+        item._decline_error = 'Confirmed quotes cannot be declined.';
+
+        return;
+    }
+
+    quotePendingDecline.value = item;
+    declineReasonInput.value = item.artist_decline_reason || defaultDeclineReason;
+    showDeclineDialog.value = true;
+}
+
+function closeDeclineDialog() {
+    showDeclineDialog.value = false;
+}
+
+function handleDeclineDialogCancel(event) {
+    event.preventDefault();
+    closeDeclineDialog();
+}
+
+function handleDeclineDialogClose() {
+    showDeclineDialog.value = false;
+    quotePendingDecline.value = null;
+    declineReasonInput.value = '';
+}
+
+function handleDeclineDialogBackdropClick(event) {
+    if (event.target === declineDialogRef.value) {
+        closeDeclineDialog();
+    }
+}
+
+async function confirmDeclineQuote() {
+    const item = quotePendingDecline.value;
+    if (!item) {
+        return;
+    }
+
+    const reason = declineReasonInput.value.trim() || defaultDeclineReason;
+
+    closeDeclineDialog();
+
+    item._declining = true;
+    item._decline_success = '';
+    item._decline_error = '';
+
+    try {
+        const response = await fetchWithCsrfRetry(`/admin/quotes/${item.id}/decline`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: jsonHeaders(),
+            body: JSON.stringify(withCsrfToken({
+                reason,
+            })),
+        });
+
+        const data = await parseJson(response);
+
+        if (!response.ok || !data.success) {
+            item._decline_error = response.status === 419
+                ? 'Session expired. Refresh and try again.'
+                : data.message || data.error || 'Failed to decline quote';
+
+            return;
+        }
+
+        if (data.quote) {
+            applyQuoteData(item, data.quote);
+        }
+
+        item._decline_success = data.message || 'Quote marked as declined.';
+    } catch {
+        item._decline_error = 'Failed to decline quote';
+    } finally {
+        item._declining = false;
+    }
+}
+
+watch(
+    () => showDeclineDialog.value,
+    (open) => {
+        if (!declineDialogRef.value) {
+            return;
+        }
+
+        if (open && !declineDialogRef.value.open) {
+            declineDialogRef.value.showModal();
+            return;
+        }
+
+        if (!open && declineDialogRef.value.open) {
+            declineDialogRef.value.close();
+        }
+    },
+);
+
 function requestDeleteQuote(item) {
     quotePendingDelete.value = item;
     showDeleteDialog.value = true;
@@ -694,10 +911,11 @@ async function deleteQuote() {
     item._error = '';
 
     try {
-        const response = await fetch(`/admin/quotes/${item.id}`, {
+        const response = await fetchWithCsrfRetry(`/admin/quotes/${item.id}`, {
             method: 'DELETE',
             credentials: 'same-origin',
-            headers: jsonHeaders(false),
+            headers: jsonHeaders(),
+            body: JSON.stringify(withCsrfToken({})),
         });
 
         const data = await parseJson(response);
@@ -719,6 +937,7 @@ async function deleteQuote() {
 }
 
 onMounted(() => {
+    initializeFocusedQuoteFromQuery();
     loadQuotes();
 });
 </script>
@@ -853,9 +1072,13 @@ onMounted(() => {
                     <article
                         v-for="quote in quotes"
                         :key="quote.id"
-                        class="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                        :id="`quote-${quote.id}`"
+                        :class="[
+                            'rounded-xl border border-slate-200 bg-slate-50 p-3 md:p-4',
+                            String(quote.id) === focusQuoteId ? 'ring-2 ring-sky-300 ring-offset-2' : '',
+                        ]"
                     >
-                        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
                             <p class="text-sm font-semibold text-slate-700">Quote #{{ quote.id }}</p>
                             <p class="text-xs text-slate-500">Created: {{ formatDateTime(quote.created_at) }}</p>
                         </div>
@@ -957,36 +1180,52 @@ onMounted(() => {
                             </div>
                         </div>
 
-                        <div v-else class="space-y-1 text-sm text-slate-700">
-                            <p><strong>Name:</strong> {{ quote.name }}</p>
-                            <p><strong>Email:</strong> {{ quote.email }}</p>
-                            <p><strong>Phone:</strong> {{ quote.phone || '—' }}</p>
-                            <p><strong>Guest Count:</strong> {{ quote.guest_count || '—' }}</p>
-                            <p><strong>Package:</strong> {{ quote.package_name || '—' }}</p>
-                            <p><strong>Services:</strong> {{ quote.services_requested_input || '—' }}</p>
-                            <p><strong>Travel Area:</strong> {{ quote.travel_area || '—' }}</p>
-                            <p><strong>Venue Type:</strong> {{ formatVenueType(quote.venue_type) }}</p>
-                            <p><strong>Heard About Us:</strong> {{ quote.heard_about || '—' }}</p>
-                            <p><strong>Terms Accepted:</strong> {{ quote.terms_accepted ? 'Yes' : 'No' }}</p>
-                            <p><strong>Terms Accepted At:</strong> {{ formatDateTime(quote.terms_accepted_at) }}</p>
-                            <p><strong>Anonymous ID:</strong> {{ quote.anonymous_id || '—' }}</p>
-                            <p><strong>Event Type:</strong> {{ quote.event_type || '—' }}</p>
-                            <p><strong>Event Date:</strong> {{ quote.event_date || '—' }}</p>
-                            <p><strong>Start:</strong> {{ quote.start_time || '—' }}</p>
-                            <p><strong>End:</strong> {{ quote.end_time || '—' }}</p>
-                            <p><strong>Total Hours:</strong> {{ quote.total_hours ?? '—' }}</p>
-                            <div v-if="hasCalculationBreakdown(quote)" class="mt-2 rounded-lg border border-slate-200 bg-white p-3">
-                                <p class="mb-1 text-xs font-semibold tracking-[0.12em] text-slate-500 uppercase">Calculation</p>
-                                <p><strong>Payment Type:</strong> {{ formatPaymentType(quote.calc_payment_type) }}</p>
-                                <p><strong>Base:</strong> {{ formatCurrency(quote.calc_base_amount) }}</p>
-                                <p><strong>Setup:</strong> {{ formatCurrency(quote.calc_setup_amount) }}</p>
-                                <p><strong>Travel:</strong> {{ formatCurrency(quote.calc_travel_amount) }}</p>
-                                <p><strong>Subtotal:</strong> {{ formatCurrency(quote.calc_subtotal) }}</p>
-                                <p><strong>GST:</strong> {{ formatCurrency(quote.calc_gst_amount) }}</p>
-                                <p><strong>Total:</strong> {{ formatCurrency(quote.calc_total_amount) }}</p>
+                        <div v-else class="space-y-3 text-sm text-slate-700">
+                            <dl class="quote-grid">
+                                <div class="quote-item"><dt>Name</dt><dd>{{ quote.name || '—' }}</dd></div>
+                                <div class="quote-item"><dt>Email</dt><dd>{{ quote.email || '—' }}</dd></div>
+                                <div class="quote-item"><dt>Phone</dt><dd>{{ quote.phone || '—' }}</dd></div>
+                                <div class="quote-item"><dt>Guest Count</dt><dd>{{ quote.guest_count || '—' }}</dd></div>
+                                <div class="quote-item"><dt>Package</dt><dd>{{ quote.package_name || '—' }}</dd></div>
+                                <div class="quote-item"><dt>Services</dt><dd>{{ quote.services_requested_input || '—' }}</dd></div>
+                                <div class="quote-item"><dt>Travel Area</dt><dd>{{ quote.travel_area || '—' }}</dd></div>
+                                <div class="quote-item"><dt>Venue Type</dt><dd>{{ formatVenueType(quote.venue_type) }}</dd></div>
+                                <div class="quote-item"><dt>Heard About</dt><dd>{{ quote.heard_about || '—' }}</dd></div>
+                                <div class="quote-item"><dt>Event Type</dt><dd>{{ quote.event_type || '—' }}</dd></div>
+                                <div class="quote-item"><dt>Event Date</dt><dd>{{ quote.event_date || '—' }}</dd></div>
+                                <div class="quote-item"><dt>Start / End</dt><dd>{{ quote.start_time || '—' }} - {{ quote.end_time || '—' }}</dd></div>
+                                <div class="quote-item"><dt>Total Hours</dt><dd>{{ quote.total_hours ?? '—' }}</dd></div>
+                                <div class="quote-item"><dt>Address</dt><dd>{{ quote.address || '—' }}</dd></div>
+                                <div class="quote-item"><dt>Terms</dt><dd>{{ quote.terms_accepted ? 'Yes' : 'No' }}</dd></div>
+                                <div class="quote-item"><dt>Terms At</dt><dd>{{ formatDateTime(quote.terms_accepted_at) }}</dd></div>
+                                <div class="quote-item"><dt>Anonymous ID</dt><dd>{{ quote.anonymous_id || '—' }}</dd></div>
+                                <div class="quote-item quote-item--full"><dt>Notes</dt><dd class="whitespace-pre-line break-words">{{ quote.notes || '—' }}</dd></div>
+                            </dl>
+
+                            <div v-if="hasCalculationBreakdown(quote)" class="quote-subcard">
+                                <p class="quote-subcard-title">Calculation</p>
+                                <dl class="quote-grid quote-grid--calc">
+                                    <div class="quote-item"><dt>Payment Type</dt><dd>{{ formatPaymentType(quote.calc_payment_type) }}</dd></div>
+                                    <div class="quote-item"><dt>Base</dt><dd>{{ formatCurrency(quote.calc_base_amount) }}</dd></div>
+                                    <div v-if="hasAddOnBreakdown(quote)" class="quote-item quote-item--full"><dt>Add-ons</dt><dd>{{ formatAddOnBreakdown(quote) }}</dd></div>
+                                    <div v-if="addOnTotalAmount(quote) !== null" class="quote-item"><dt>Add-on Total</dt><dd>{{ formatCurrency(addOnTotalAmount(quote)) }}</dd></div>
+                                    <div class="quote-item"><dt>Setup</dt><dd>{{ formatCurrency(quote.calc_setup_amount) }}</dd></div>
+                                    <div class="quote-item"><dt>Travel</dt><dd>{{ formatCurrency(quote.calc_travel_amount) }}</dd></div>
+                                    <div class="quote-item"><dt>Subtotal</dt><dd>{{ formatCurrency(quote.calc_subtotal) }}</dd></div>
+                                    <div v-if="shouldShowGst(quote)" class="quote-item"><dt>GST</dt><dd>{{ formatCurrency(quote.calc_gst_amount) }}</dd></div>
+                                    <div class="quote-item"><dt>Total</dt><dd>{{ formatCurrency(quote.calc_total_amount) }}</dd></div>
+                                </dl>
                             </div>
-                            <p><strong>Address:</strong> {{ quote.address || '—' }}</p>
-                            <p><strong>Notes:</strong> {{ quote.notes || '—' }}</p>
+
+                            <p v-if="quote.artist_decline_reason" class="compact-note"><strong>Decline Reason:</strong> {{ quote.artist_decline_reason }}</p>
+                            <p v-if="quote.client_suggested_time_at" class="compact-note">
+                                <strong>Suggested New Time:</strong>
+                                {{ quote.client_suggested_event_date || '—' }}
+                                {{ quote.client_suggested_start_time || '—' }} - {{ quote.client_suggested_end_time || '—' }}
+                                (submitted {{ formatDateTime(quote.client_suggested_time_at) }})
+                            </p>
+                            <p v-if="quote.client_suggested_time_notes" class="compact-note"><strong>Suggestion Notes:</strong> {{ quote.client_suggested_time_notes }}</p>
+
                             <p class="status-line">
                                 <strong>Email Status:</strong>
                                 <span :class="emailStatusPillClass(quote)">{{ formatEmailSendStatus(quote) }}</span>
@@ -996,14 +1235,21 @@ onMounted(() => {
                                 <span :class="openedStatusPillClass(quote)">{{ formatOpenTrackingStatus(quote) }}</span>
                             </p>
                             <p class="status-line">
-                                <strong>Confirmed:</strong>
+                                <strong>Booking Status:</strong>
                                 <span :class="confirmedStatusPillClass(quote)">{{ formatConfirmationStatus(quote) }}</span>
                             </p>
 
-                            <div class="mt-3 flex flex-wrap gap-2">
+                            <div class="mt-2 flex flex-wrap gap-2">
                                 <Link class="primary-btn" :href="calculatorUrl(quote)">Calculate</Link>
                                 <button class="primary-btn" :disabled="quote._sending_email" @click="sendQuoteEmail(quote)">
                                     {{ quote._sending_email ? 'Sending...' : 'Send Quote Email' }}
+                                </button>
+                                <button
+                                    class="danger-btn"
+                                    :disabled="quote._declining || Boolean(quote.client_confirmed_at)"
+                                    @click="requestDeclineQuote(quote)"
+                                >
+                                    {{ quote._declining ? 'Declining...' : 'Decline (Time Unavailable)' }}
                                 </button>
                                 <button class="secondary-btn" @click="startEdit(quote)">Edit</button>
                                 <button class="danger-btn" :disabled="quote._saving" @click="requestDeleteQuote(quote)">Delete</button>
@@ -1013,6 +1259,8 @@ onMounted(() => {
                         <p v-if="quote._error" class="mt-2 text-sm font-semibold text-rose-700">{{ quote._error }}</p>
                         <p v-if="quote._email_success" class="mt-2 text-sm font-semibold text-emerald-700">{{ quote._email_success }}</p>
                         <p v-if="quote._email_error" class="mt-2 text-sm font-semibold text-rose-700">{{ quote._email_error }}</p>
+                        <p v-if="quote._decline_success" class="mt-2 text-sm font-semibold text-emerald-700">{{ quote._decline_success }}</p>
+                        <p v-if="quote._decline_error" class="mt-2 text-sm font-semibold text-rose-700">{{ quote._decline_error }}</p>
                     </article>
                 </div>
             </section>
@@ -1031,6 +1279,51 @@ onMounted(() => {
         danger
         @confirm="deleteQuote"
     />
+
+    <dialog
+        ref="declineDialogRef"
+        class="decline-dialog"
+        @cancel="handleDeclineDialogCancel"
+        @close="handleDeclineDialogClose"
+        @click="handleDeclineDialogBackdropClick"
+    >
+        <section class="decline-panel">
+            <h3 class="decline-title">Decline Quote</h3>
+            <p class="decline-message">
+                {{
+                    quotePendingDecline
+                        ? `Add a reason for declining quote #${quotePendingDecline.id} (${quotePendingDecline.name || quotePendingDecline.email}).`
+                        : 'Add a reason for declining this quote.'
+                }}
+            </p>
+
+            <label class="decline-label" for="declineReason">Decline reason</label>
+            <textarea
+                id="declineReason"
+                v-model="declineReasonInput"
+                class="decline-textarea"
+                rows="4"
+                maxlength="1000"
+                placeholder="Requested time does not suit our availability. Please reply with another preferred time."
+            ></textarea>
+
+            <div class="decline-actions">
+                <button type="button" class="secondary-btn" @click="closeDeclineDialog">Cancel</button>
+                <button
+                    type="button"
+                    class="danger-btn"
+                    :disabled="Boolean(quotePendingDecline && quotePendingDecline._declining)"
+                    @click="confirmDeclineQuote"
+                >
+                    {{
+                        quotePendingDecline && quotePendingDecline._declining
+                            ? 'Declining...'
+                            : 'Decline Quote'
+                    }}
+                </button>
+            </div>
+        </section>
+    </dialog>
 </template>
 
 <style scoped>
@@ -1114,6 +1407,127 @@ onMounted(() => {
 .danger-btn:hover {
     background: #ffe4e6;
     border-color: #fda4af;
+}
+
+.decline-dialog {
+    max-width: 34rem;
+    width: calc(100% - 2rem);
+    border: none;
+    padding: 0;
+    background: transparent;
+}
+
+.decline-dialog::backdrop {
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(2px);
+}
+
+.decline-panel {
+    border-radius: 1rem;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    padding: 1rem;
+    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.2);
+}
+
+.decline-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.decline-message {
+    margin-top: 0.5rem;
+    color: #475569;
+    line-height: 1.5;
+}
+
+.decline-label {
+    display: block;
+    margin-top: 0.9rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #334155;
+}
+
+.decline-textarea {
+    margin-top: 0.35rem;
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #0f172a;
+    padding: 0.65rem 0.8rem;
+    min-height: 6.5rem;
+    resize: vertical;
+}
+
+.decline-textarea:focus {
+    outline: none;
+    border-color: #f43f5e;
+    box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.16);
+}
+
+.decline-actions {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.quote-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.4rem 0.9rem;
+}
+
+.quote-grid--calc {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.quote-item {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    align-items: start;
+    gap: 0.35rem;
+    line-height: 1.3;
+}
+
+.quote-item dt {
+    font-weight: 700;
+    color: #475569;
+}
+
+.quote-item dd {
+    margin: 0;
+    color: #0f172a;
+    min-width: 0;
+    word-break: break-word;
+}
+
+.quote-item--full {
+    grid-column: 1 / -1;
+}
+
+.quote-subcard {
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    padding: 0.65rem 0.75rem;
+}
+
+.quote-subcard-title {
+    margin: 0 0 0.4rem 0;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+.compact-note {
+    margin: 0;
+    line-height: 1.35;
 }
 
 .status-line {

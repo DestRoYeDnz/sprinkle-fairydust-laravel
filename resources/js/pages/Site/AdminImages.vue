@@ -3,6 +3,7 @@ import { Head } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import AdminMenu from '@/components/admin/AdminMenu.vue';
 import ConfirmDialog from '@/components/admin/ConfirmDialog.vue';
+import { appendCsrfToken, csrfHeaders, fetchWithCsrfRetry } from '@/lib/csrf';
 import SprinkleLayout from '../../layouts/SprinkleLayout.vue';
 
 defineOptions({
@@ -16,7 +17,6 @@ const uploading = ref(false);
 const collection = ref('gallery');
 const altText = ref('');
 const showMissingFileDialog = ref(false);
-const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 
 function handleFile(eventInput) {
     file.value = eventInput.target.files?.[0] ?? null;
@@ -40,13 +40,11 @@ async function uploadImage() {
             formData.append('alt_text', altText.value.trim());
         }
 
-        const response = await fetch('/admin/images/upload', {
+        const response = await fetchWithCsrfRetry('/admin/images/upload', {
             method: 'POST',
-            headers: {
-                Accept: 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-            },
-            body: formData,
+            credentials: 'same-origin',
+            headers: csrfHeaders(false),
+            body: appendCsrfToken(formData),
         });
 
         const data = await response.json();

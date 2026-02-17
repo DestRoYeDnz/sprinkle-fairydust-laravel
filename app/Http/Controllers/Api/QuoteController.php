@@ -28,7 +28,7 @@ class QuoteController extends Controller
             'date' => ['nullable', 'date'],
             'address' => ['nullable', 'string', 'max:255'],
             'package_name' => ['nullable', 'string', 'max:120'],
-            'services_requested' => ['nullable', 'array', 'max:8'],
+            'services_requested' => ['nullable', 'array', 'max:20'],
             'services_requested.*' => ['string', 'max:80'],
             'travel_area' => ['nullable', 'string', 'max:255'],
             'venue_type' => ['nullable', Rule::in(['indoor', 'outdoor', 'mixed', 'unsure'])],
@@ -138,52 +138,11 @@ class QuoteController extends Controller
             ? "{$calculatorBaseUrl}?{$calculatorParams}"
             : $calculatorBaseUrl;
 
-        $serviceListHtml = $this->serviceListHtml($quote->services_requested);
-        $venueTypeLabel = $this->formatVenueType($quote->venue_type);
-
         Mail::to($toEmail, 'Sprinkle Fairydust Admin')->send(
             (new StyledHtmlMail(
                 sprintf('New Quote Request: %s from %s', $quote->event_type ?: 'Event', $quote->name),
-                sprintf(
-                    '<h2>New Quote Request ✨</h2>'.
-                        '<p><strong>Name:</strong> %s</p>'.
-                        '<p><strong>Email:</strong> %s</p>'.
-                        '<p><strong>Phone:</strong> %s</p>'.
-                        '<p><strong>Event Type:</strong> %s</p>'.
-                        '<p><strong>Event Date:</strong> %s</p>'.
-                        '<p><strong>Start Time:</strong> %s</p>'.
-                        '<p><strong>End Time:</strong> %s</p>'.
-                        '<p><strong>Total Hours (rounded):</strong> %s</p>'.
-                        '<p><strong>Guest Count:</strong> %s</p>'.
-                        '<p><strong>Package:</strong> %s</p>'.
-                        '<p><strong>Services Requested:</strong></p>%s'.
-                        '<p><strong>Travel Area:</strong> %s</p>'.
-                        '<p><strong>Venue Type:</strong> %s</p>'.
-                        '<p><strong>How They Heard About Us:</strong> %s</p>'.
-                        '<p><strong>Address:</strong> %s</p>'.
-                        '<p><strong>Additional Details:</strong></p><p>%s</p>'.
-                        '<p><strong>Terms Accepted:</strong> Yes (%s)</p>'.
-                        '<hr>'.
-                        '<a href="%s" style="display:inline-block;margin-top:10px;color:#0066ff;">Open Quote Calculator</a>',
-                    e($quote->name),
-                    e($quote->email),
-                    e($quote->phone ?: '—'),
-                    e($quote->event_type ?: '—'),
-                    e(optional($quote->event_date)->format('Y-m-d') ?: '—'),
-                    e($quote->start_time ?: '—'),
-                    e($quote->end_time ?: '—'),
-                    e($quote->total_hours !== null ? (string) $quote->total_hours : '—'),
-                    e($quote->guest_count !== null ? (string) $quote->guest_count : '—'),
-                    e($quote->package_name ?: '—'),
-                    $serviceListHtml,
-                    e($quote->travel_area ?: '—'),
-                    e($venueTypeLabel),
-                    e($quote->heard_about ?: '—'),
-                    e($quote->address ?: '—'),
-                    nl2br(e($quote->notes ?: '—')),
-                    e(optional($quote->terms_accepted_at)->toDateTimeString() ?: now()->toDateTimeString()),
-                    e($calculatorLink),
-                ),
+                $this->newQuoteRequestAdminEmailHtml($quote, $calculatorLink),
+                $this->newQuoteRequestAdminEmailText($quote, $calculatorLink),
             ))->replyTo($quote->email, $quote->name)
         );
     }
@@ -265,20 +224,124 @@ class QuoteController extends Controller
         return $normalized === [] ? null : $normalized;
     }
 
+    private function newQuoteRequestAdminEmailHtml(Quote $quote, string $calculatorLink): string
+    {
+        $logoUrl = rtrim((string) config('app.url', ''), '/').'/images/logo.png';
+        $eventDate = $quote->event_date?->format('l, j F Y') ?: 'To be confirmed';
+        $termsAcceptedAt = $quote->terms_accepted_at?->format('Y-m-d H:i:s') ?: now()->format('Y-m-d H:i:s');
+
+        $snapshotRows = implode('', [
+            $this->emailRow('Name', e($quote->name)),
+            $this->emailRow('Email', e($quote->email)),
+            $this->emailRow('Phone', e($quote->phone ?: '—')),
+            $this->emailRow('Event Type', e($quote->event_type ?: '—')),
+            $this->emailRow('Event Date', e($eventDate)),
+            $this->emailRow('Start Time', e($this->formatTime($quote->start_time))),
+            $this->emailRow('End Time', e($this->formatTime($quote->end_time))),
+            $this->emailRow('Total Hours', e($quote->total_hours !== null ? number_format($quote->total_hours, 2) : '—')),
+            $this->emailRow('Guest Count', e($quote->guest_count !== null ? (string) $quote->guest_count : '—')),
+            $this->emailRow('Package', e($quote->package_name ?: '—')),
+            $this->emailRow('Services', e($this->formatServices($quote->services_requested))),
+            $this->emailRow('Travel Area', e($quote->travel_area ?: '—')),
+            $this->emailRow('Venue Type', e($this->formatVenueType($quote->venue_type))),
+            $this->emailRow('Heard About Us', e($quote->heard_about ?: '—')),
+            $this->emailRow('Address', e($quote->address ?: '—')),
+            $this->emailRow('Anonymous ID', e($quote->anonymous_id ?: '—')),
+            $this->emailRow('Terms Accepted', e('Yes ('.$termsAcceptedAt.')')),
+        ]);
+
+        $notes = $quote->notes ? nl2br(e($quote->notes)) : '—';
+
+        return '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#eaf7ff;font-family:Quicksand,Arial,sans-serif;color:#0f172a;">'
+            .'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:radial-gradient(circle at top,#bfdbfe 0%,#ccfbf1 45%,#f0f9ff 100%);padding:30px 12px;"><tr><td align="center">'
+            .'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:660px;background:#ffffff;border-radius:24px;overflow:hidden;border:1px solid #bae6fd;box-shadow:0 24px 44px rgba(14,116,144,0.16);">'
+            .'<tr><td style="padding:12px 20px;background:#0c4a6e;text-align:center;">'
+            .'<p style="margin:0;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#cffafe;font-weight:700;">Sprinkle Fairydust Face Painting</p>'
+            .'</td></tr>'
+            .'<tr><td style="padding:28px 26px 24px;background:linear-gradient(135deg,#dbeafe 0%,#ccfbf1 52%,#e0f2fe 100%);">'
+            .'<img src="'.e($logoUrl).'" alt="Sprinkle Fairydust" style="width:128px;height:auto;display:block;margin:0 auto 12px auto;">'
+            .'<h1 style="margin:0;text-align:center;font-size:34px;line-height:1.15;color:#0c4a6e;">New Quote Request</h1>'
+            .'<p style="margin:10px auto 0 auto;max-width:520px;text-align:center;font-size:14px;line-height:1.6;color:#155e75;">A new quote request has been submitted from the website.</p>'
+            .'</td></tr>'
+            .'<tr><td style="padding:24px 26px 28px 26px;">'
+            .'<div style="border:1px solid #bfdbfe;border-radius:16px;padding:15px 16px;background:#f8fbff;margin-bottom:14px;">'
+            .'<p style="margin:0 0 10px 0;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#0369a1;font-weight:700;">Request Snapshot</p>'
+            .'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">'
+            .$snapshotRows
+            .'<tr><td style="padding:8px 0;color:#475569;vertical-align:top;">Additional Details</td><td style="padding:8px 0;text-align:right;color:#0f172a;font-weight:700;">'.$notes.'</td></tr>'
+            .'</table></div>'
+            .'<div style="margin-top:16px;border-radius:14px;padding:14px 16px;background:#eff6ff;border:1px dashed #7dd3fc;">'
+            .'<p style="margin:0;font-size:13px;line-height:1.7;color:#1e3a8a;">Open the calculator to review and prepare the client quote.</p>'
+            .'</div>'
+            .'<p style="margin:14px 0 0 0;"><a href="'.e($calculatorLink).'" style="display:inline-block;background:linear-gradient(135deg,#0ea5e9,#14b8a6);color:#ecfeff;text-decoration:none;font-weight:700;padding:11px 16px;border-radius:999px;">Open Quote Calculator</a></p>'
+            .'<p style="margin:18px 0 0 0;font-size:14px;color:#0f172a;">With sparkles,<br><strong>Sprinkle Fairydust Face Painting</strong></p>'
+            .'</td></tr>'
+            .'</table>'
+            .'<p style="margin:12px 0 0 0;text-align:center;font-size:12px;color:#64748b;">Creating magical moments, one painted smile at a time.</p>'
+            .'</td></tr></table></body></html>';
+    }
+
+    private function newQuoteRequestAdminEmailText(Quote $quote, string $calculatorLink): string
+    {
+        $eventDate = $quote->event_date?->format('l, j F Y') ?: 'To be confirmed';
+
+        return implode("\n", [
+            'New Quote Request',
+            '=================',
+            '',
+            'Name: '.($quote->name ?: '—'),
+            'Email: '.($quote->email ?: '—'),
+            'Phone: '.($quote->phone ?: '—'),
+            'Event Type: '.($quote->event_type ?: '—'),
+            'Event Date: '.$eventDate,
+            'Start Time: '.$this->formatTime($quote->start_time),
+            'End Time: '.$this->formatTime($quote->end_time),
+            'Total Hours: '.($quote->total_hours !== null ? number_format($quote->total_hours, 2) : '—'),
+            'Guest Count: '.($quote->guest_count !== null ? (string) $quote->guest_count : '—'),
+            'Package: '.($quote->package_name ?: '—'),
+            'Services: '.$this->formatServices($quote->services_requested),
+            'Travel Area: '.($quote->travel_area ?: '—'),
+            'Venue Type: '.$this->formatVenueType($quote->venue_type),
+            'Heard About Us: '.($quote->heard_about ?: '—'),
+            'Address: '.($quote->address ?: '—'),
+            'Anonymous ID: '.($quote->anonymous_id ?: '—'),
+            'Additional Details: '.($quote->notes ?: '—'),
+            '',
+            'Open Quote Calculator: '.$calculatorLink,
+        ]);
+    }
+
     /**
      * @param  array<int, string>|null  $services
      */
-    private function serviceListHtml(?array $services): string
+    private function formatServices(?array $services): string
     {
         if (! is_array($services) || $services === []) {
-            return '<p>—</p>';
+            return '—';
         }
 
-        $items = collect($services)
-            ->map(fn (string $service): string => '<li>'.e($service).'</li>')
-            ->implode('');
+        return implode(', ', $services);
+    }
 
-        return "<ul>{$items}</ul>";
+    private function emailRow(string $label, string $value): string
+    {
+        return '<tr>'
+            .'<td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#475569;">'.e($label).'</td>'
+            .'<td style="padding:8px 0;border-bottom:1px solid #e2e8f0;text-align:right;color:#0f172a;font-weight:700;">'.$value.'</td>'
+            .'</tr>';
+    }
+
+    private function formatTime(?string $time): string
+    {
+        if (! $time) {
+            return '—';
+        }
+
+        try {
+            return Carbon::parse($time)->format('g:i A');
+        } catch (\Throwable) {
+            return $time;
+        }
     }
 
     private function formatVenueType(?string $venueType): string

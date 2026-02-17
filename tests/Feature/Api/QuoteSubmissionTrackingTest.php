@@ -42,7 +42,9 @@ it('stores the anonymous tracking id when submitting a quote request', function 
         ->and($quote->terms_accepted_at)->not->toBeNull();
 
     Mail::assertSent(StyledHtmlMail::class, function (StyledHtmlMail $mail): bool {
-        return $mail->hasTo('admin@sprinkle.test');
+        return $mail->hasTo('admin@sprinkle.test')
+            && str_contains($mail->htmlContent, 'Sprinkle Fairydust Face Painting')
+            && str_contains($mail->htmlContent, 'Open Quote Calculator');
     });
 });
 
@@ -67,6 +69,35 @@ it('allows quote submissions without an anonymous tracking id', function () {
     expect($quote->anonymous_id)->toBeNull();
 
     Mail::assertSent(StyledHtmlMail::class, function (StyledHtmlMail $mail): bool {
-        return $mail->hasTo('brettj@dekode.co.nz');
+        return $mail->hasTo('brettj@dekode.co.nz')
+            && str_contains($mail->htmlContent, 'Sprinkle Fairydust Face Painting')
+            && str_contains($mail->htmlContent, 'Open Quote Calculator');
     });
+});
+
+it('stores larger combined services and add-ons lists for quote submissions', function () {
+    config([
+        'services.sprinkle.quote_notification_email' => 'admin@sprinkle.test',
+    ]);
+
+    Mail::fake();
+
+    $servicesRequested = collect(range(1, 12))
+        ->map(fn (int $index): string => "Add-on: Option {$index}")
+        ->all();
+
+    $this->postJson('/api/quotes', [
+        'name' => 'Addon Client',
+        'email' => 'addon-client@example.com',
+        'event' => 'Community Day',
+        'date' => now()->toDateString(),
+        'package_name' => 'Festival Crowd Package',
+        'services_requested' => $servicesRequested,
+        'terms_accepted' => true,
+    ])->assertOk()
+        ->assertJsonPath('success', true);
+
+    $quote = Quote::query()->firstOrFail();
+
+    expect($quote->services_requested)->toBe($servicesRequested);
 });

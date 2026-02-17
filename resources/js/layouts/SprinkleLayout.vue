@@ -21,9 +21,33 @@ const currentPath = computed(() => page.url.split('?')[0]);
 const isAdminPage = computed(() => currentPath.value === '/admin' || currentPath.value.startsWith('/admin/'));
 const showMobileQuoteCta = computed(() => !isAdminPage.value && currentPath.value !== '/quote');
 const starsRef = ref(null);
+const navOpen = ref(false);
+const publicNavId = 'public-site-nav';
 
 function isActive(href) {
     return currentPath.value === href;
+}
+
+function closeNav() {
+    navOpen.value = false;
+}
+
+function toggleNav() {
+    navOpen.value = !navOpen.value;
+}
+
+function handleNavLinkClick() {
+    closeNav();
+}
+
+function handleViewportChange() {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
+    if (window.innerWidth > 1024) {
+        closeNav();
+    }
 }
 
 function renderStars() {
@@ -50,18 +74,21 @@ onMounted(() => {
     document.documentElement.classList.add('sprinkle-theme');
     document.body.classList.add('sprinkle-theme');
     renderStars();
+    window.addEventListener('resize', handleViewportChange);
 });
 
 watch(
     () => page.url,
     () => {
         renderStars();
+        closeNav();
     },
 );
 
 onBeforeUnmount(() => {
     document.documentElement.classList.remove('sprinkle-theme');
     document.body.classList.remove('sprinkle-theme');
+    window.removeEventListener('resize', handleViewportChange);
     if (starsRef.value) {
         starsRef.value.innerHTML = '';
     }
@@ -72,20 +99,40 @@ onBeforeUnmount(() => {
     <div class="sprinkle-shell">
         <div ref="starsRef" class="stars"></div>
 
-        <div v-if="!isAdminPage" class="nav-wrap">
-            <nav class="nav">
+        <div v-if="!isAdminPage" class="nav-wrap" @keydown.esc="closeNav">
+            <button
+                type="button"
+                class="nav-toggle"
+                :class="{ 'is-open': navOpen }"
+                :aria-controls="publicNavId"
+                :aria-expanded="navOpen ? 'true' : 'false'"
+                aria-label="Toggle navigation menu"
+                @click="toggleNav"
+            >
+                <span class="nav-toggle__bars" aria-hidden="true">
+                    <span class="nav-toggle__bar"></span>
+                    <span class="nav-toggle__bar"></span>
+                    <span class="nav-toggle__bar"></span>
+                </span>
+                <span class="nav-toggle__text">{{ navOpen ? 'Close' : 'Menu' }}</span>
+            </button>
+
+            <nav :id="publicNavId" class="nav" :class="{ 'nav--open': navOpen }">
                 <Link
                     v-for="link in links"
                     :key="link.href"
                     :href="link.href"
                     :class="{ active: isActive(link.href) }"
+                    @click="handleNavLinkClick"
                 >
                     {{ link.label }}
                 </Link>
             </nav>
         </div>
 
-        <slot />
+        <div class="sprinkle-content">
+            <slot />
+        </div>
 
         <Link v-if="showMobileQuoteCta" href="/quote" class="mobile-quote-cta">
             Get Quote
@@ -134,7 +181,21 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.sprinkle-shell {
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+}
+
+.sprinkle-content {
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
 .footer-glow {
+    margin-top: auto;
     text-align: center;
     padding: 1rem;
     color: #fff;

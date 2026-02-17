@@ -39,6 +39,7 @@ return [
         'admin_auth_key' => env('ADMIN_AUTH_KEY'),
         'quote_notification_email' => env('QUOTE_NOTIFICATION_EMAIL', 'brettj@dekode.co.nz'),
         'quote_confirmed_notification_email' => env('QUOTE_CONFIRMED_NOTIFICATION_EMAIL', env('QUOTE_NOTIFICATION_EMAIL', 'brettj@dekode.co.nz')),
+        'quote_reschedule_notification_email' => env('QUOTE_RESCHEDULE_NOTIFICATION_EMAIL', env('QUOTE_NOTIFICATION_EMAIL', 'brettj@dekode.co.nz')),
         'testimonial_notification_email' => env('TESTIMONIAL_NOTIFICATION_EMAIL', env('QUOTE_NOTIFICATION_EMAIL', 'brettj@dekode.co.nz')),
         'quote_admin_copy_email' => env('QUOTE_ADMIN_COPY_EMAIL'),
         'quote_link_expiry_days' => env('QUOTE_LINK_EXPIRY_DAYS', 45),

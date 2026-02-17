@@ -11,21 +11,39 @@ defineOptions({
 const packageOptions = [
     {
         name: 'Mini Party Sparkle',
+        price: 'From $260',
         hours: '2 hours',
         guestGuide: 'Up to 20 kids',
         summary: 'Great for smaller birthday groups and short sessions.',
+        features: [
+            'Quick queue-friendly face designs',
+            'Glitter finish options included',
+            'Ideal for intimate birthday setups',
+        ],
     },
     {
         name: 'Classic Birthday Magic',
+        price: 'From $360',
         hours: '3 hours',
         guestGuide: 'Around 30 kids',
         summary: 'Best all-round package for party flow and full variety.',
+        features: [
+            'Full design menu for mixed age groups',
+            'Balanced pacing for party schedules',
+            'Most popular birthday package',
+        ],
     },
     {
         name: 'Festival Crowd Package',
+        price: 'From $520',
         hours: '4+ hours',
         guestGuide: 'Large public events',
         summary: 'Built for schools, markets, fairs, and high-volume lines.',
+        features: [
+            'High-throughput design flow',
+            'Flexible timing for peak periods',
+            'Best for community and public events',
+        ],
     },
 ];
 
@@ -35,6 +53,25 @@ const serviceOptions = [
     'Festival Bling',
     'Themed Character Looks',
     'Waterproof Festival Designs',
+];
+
+const addOnOptions = [
+    {
+        name: 'Premium Glitter Bar',
+        summary: 'Extra sparkle station for guests who want glitter-only looks.',
+    },
+    {
+        name: 'Festival Gems',
+        summary: 'Adhesive face gems and jewels for standout photos.',
+    },
+    {
+        name: 'Express Queue Upgrade',
+        summary: 'Fast-design menu for high-volume events.',
+    },
+    {
+        name: 'Theme-Matched Design Set',
+        summary: 'Design board tailored to your event theme.',
+    },
 ];
 
 const referralOptions = [
@@ -104,12 +141,18 @@ const form = ref({
     guest_count: '',
     package_name: '',
     services_requested: [],
+    add_ons: [],
+    custom_add_on: '',
     travel_area: '',
     venue_type: '',
     heard_about: '',
     address: '',
     details: '',
     terms_accepted: false,
+});
+
+const selectedPackage = computed(() => {
+    return packageOptions.find((item) => item.name === form.value.package_name) ?? null;
 });
 
 const endTimeOptions = computed(() => {
@@ -173,6 +216,18 @@ function toggleService(service) {
     form.value.services_requested = [...form.value.services_requested, service];
 }
 
+function toggleAddOn(addOnName) {
+    trackQuoteStartIfNeeded();
+
+    if (form.value.add_ons.includes(addOnName)) {
+        form.value.add_ons = form.value.add_ons.filter((item) => item !== addOnName);
+        return;
+    }
+
+    form.value.add_ons = [...form.value.add_ons, addOnName];
+    trackCustomTrackingEvent('quote_funnel_addon_selected');
+}
+
 function resetForm() {
     form.value = {
         name: '',
@@ -185,6 +240,8 @@ function resetForm() {
         guest_count: '',
         package_name: '',
         services_requested: [],
+        add_ons: [],
+        custom_add_on: '',
         travel_area: '',
         venue_type: '',
         heard_about: '',
@@ -220,11 +277,27 @@ async function submitForm() {
     }
 
     try {
+        const selectedAddOns = form.value.add_ons.map((addOn) => `Add-on: ${addOn}`);
+        const customAddOn = String(form.value.custom_add_on ?? '').trim();
+
+        if (customAddOn !== '') {
+            selectedAddOns.push(`Add-on: ${customAddOn}`);
+        }
+
+        const requestedServices = [...new Set([
+            ...form.value.services_requested,
+            ...selectedAddOns,
+        ])];
+
         const payload = {
             ...form.value,
             guest_count: form.value.guest_count ? Number(form.value.guest_count) : null,
+            services_requested: requestedServices,
             anonymous_id: getOrCreateAnonymousId(),
         };
+
+        delete payload.add_ons;
+        delete payload.custom_add_on;
 
         const response = await fetch('/api/quotes', {
             method: 'POST',
@@ -287,9 +360,16 @@ async function submitForm() {
                 class="package-card"
             >
                 <h2 class="package-title">{{ item.name }}</h2>
+                <p class="package-price">{{ item.price }}</p>
                 <p class="package-meta">{{ item.hours }} · {{ item.guestGuide }}</p>
                 <p class="package-copy">{{ item.summary }}</p>
-                <button type="button" class="mini-cta" @click="selectPackage(item.name)">Choose Package</button>
+                <p class="package-feature-heading">Features</p>
+                <ul class="package-feature-list">
+                    <li v-for="feature in item.features" :key="`${item.name}-${feature}`">{{ feature }}</li>
+                </ul>
+                <button type="button" class="mini-cta" @click="selectPackage(item.name)">
+                    {{ form.package_name === item.name ? 'Selected' : 'Choose Package' }}
+                </button>
             </article>
         </section>
 
@@ -408,7 +488,7 @@ async function submitForm() {
                         >
                             <option disabled value="">Select package</option>
                             <option v-for="item in packageOptions" :key="item.name" :value="item.name">
-                                {{ item.name }}
+                                {{ item.name }} ({{ item.price }})
                             </option>
                         </select>
                     </label>
@@ -423,6 +503,13 @@ async function submitForm() {
                             @focus="trackQuoteStartIfNeeded"
                         />
                     </label>
+                </div>
+
+                <div v-if="selectedPackage" class="package-preview">
+                    <p class="package-preview-title">{{ selectedPackage.name }} ({{ selectedPackage.price }}) includes:</p>
+                    <ul class="package-preview-list">
+                        <li v-for="feature in selectedPackage.features" :key="`selected-${feature}`">{{ feature }}</li>
+                    </ul>
                 </div>
 
                 <div>
@@ -440,6 +527,34 @@ async function submitForm() {
                         </button>
                     </div>
                 </div>
+
+                <div>
+                    <span class="form-label">Optional Add-ons</span>
+                    <div class="addon-grid">
+                        <button
+                            v-for="addOn in addOnOptions"
+                            :key="addOn.name"
+                            type="button"
+                            class="addon-pill"
+                            :class="{ 'addon-pill--active': form.add_ons.includes(addOn.name) }"
+                            @click="toggleAddOn(addOn.name)"
+                        >
+                            <span class="addon-pill-title">{{ addOn.name }}</span>
+                            <span class="addon-pill-copy">{{ addOn.summary }}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <label>
+                    <span class="form-label">Custom Add-on (optional)</span>
+                    <input
+                        v-model="form.custom_add_on"
+                        type="text"
+                        class="form-input"
+                        placeholder="e.g. Extra artist, balloon twisting"
+                        @focus="trackQuoteStartIfNeeded"
+                    />
+                </label>
 
                 <div class="grid gap-4 md:grid-cols-2">
                     <label>
@@ -567,8 +682,15 @@ async function submitForm() {
     color: #bae6fd;
 }
 
-.package-meta {
+.package-price {
     margin-top: 0.35rem;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #fef08a;
+}
+
+.package-meta {
+    margin-top: 0.2rem;
     font-size: 0.9rem;
     color: #dbeafe;
 }
@@ -578,6 +700,24 @@ async function submitForm() {
     font-size: 0.95rem;
     line-height: 1.4;
     color: rgba(236, 254, 255, 0.9);
+}
+
+.package-feature-heading {
+    margin: 0.7rem 0 0.35rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #7dd3fc;
+    font-weight: 700;
+}
+
+.package-feature-list {
+    margin: 0;
+    padding-left: 1rem;
+    display: grid;
+    gap: 0.25rem;
+    font-size: 0.83rem;
+    color: #e0f2fe;
 }
 
 .mini-cta {
@@ -630,6 +770,30 @@ async function submitForm() {
     gap: 0.5rem;
 }
 
+.package-preview {
+    border: 1px solid rgba(191, 219, 254, 0.65);
+    background: rgba(15, 23, 42, 0.42);
+    border-radius: 0.9rem;
+    padding: 0.7rem 0.85rem;
+}
+
+.package-preview-title {
+    margin: 0;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #bae6fd;
+}
+
+.package-preview-list {
+    margin: 0.45rem 0 0;
+    padding-left: 1rem;
+    display: grid;
+    gap: 0.2rem;
+    font-size: 0.82rem;
+    color: #e2e8f0;
+}
+
 .service-pill {
     border: 1px solid rgba(191, 219, 254, 0.45);
     border-radius: 999px;
@@ -641,6 +805,47 @@ async function submitForm() {
 }
 
 .service-pill--active {
+    background: rgba(20, 184, 166, 0.35);
+    border-color: rgba(153, 246, 228, 0.9);
+    color: #ecfeff;
+}
+
+.addon-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.55rem;
+}
+
+.addon-pill {
+    text-align: left;
+    border: 1px solid rgba(191, 219, 254, 0.45);
+    border-radius: 0.8rem;
+    background: rgba(14, 165, 233, 0.16);
+    color: #e0f2fe;
+    padding: 0.55rem 0.65rem;
+    cursor: pointer;
+    transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.addon-pill:hover {
+    transform: translateY(-1px);
+}
+
+.addon-pill-title {
+    display: block;
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+
+.addon-pill-copy {
+    display: block;
+    margin-top: 0.2rem;
+    font-size: 0.74rem;
+    line-height: 1.35;
+    color: rgba(219, 234, 254, 0.95);
+}
+
+.addon-pill--active {
     background: rgba(20, 184, 166, 0.35);
     border-color: rgba(153, 246, 228, 0.9);
     color: #ecfeff;

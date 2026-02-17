@@ -2,6 +2,7 @@
 import { Head } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import AdminMenu from '@/components/admin/AdminMenu.vue';
+import { appendCsrfToken, csrfHeaders, fetchWithCsrfRetry, withCsrfToken } from '@/lib/csrf';
 import SprinkleLayout from '../../layouts/SprinkleLayout.vue';
 
 defineOptions({
@@ -15,7 +16,6 @@ const imageFile = ref(null);
 const uploadingImage = ref(false);
 const imageUploadError = ref('');
 const imageUploadSuccess = ref('');
-const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 
 const event = ref({
     name: '',
@@ -53,13 +53,11 @@ async function uploadEventImage() {
             formData.append('alt_text', `${event.value.name} event image`);
         }
 
-        const response = await fetch('/admin/images/upload', {
+        const response = await fetchWithCsrfRetry('/admin/images/upload', {
             method: 'POST',
-            headers: {
-                Accept: 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-            },
-            body: formData,
+            credentials: 'same-origin',
+            headers: csrfHeaders(false),
+            body: appendCsrfToken(formData),
         });
 
         const data = await response.json();
@@ -84,14 +82,11 @@ async function saveEvent() {
     saveError.value = '';
 
     try {
-        const response = await fetch('/admin/events', {
+        const response = await fetchWithCsrfRetry('/admin/events', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-            },
-            body: JSON.stringify(event.value),
+            credentials: 'same-origin',
+            headers: csrfHeaders(),
+            body: JSON.stringify(withCsrfToken(event.value)),
         });
 
         const data = await response.json();

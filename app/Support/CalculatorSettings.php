@@ -45,6 +45,10 @@ class CalculatorSettings
                 'hours' => 8,
                 'pricePerFace' => 10,
                 'numFaces' => 30,
+                'packageHours' => 3,
+                'packageBaseAmount' => 360,
+                'selectedAddOns' => [],
+                'customAddOns' => [],
                 'includeSetup' => false,
                 'setupRate' => 60,
                 'setupHours' => 2,
@@ -91,11 +95,18 @@ class CalculatorSettings
             'form.eventAddress' => ['nullable', 'string', 'max:255'],
             'form.notes' => ['nullable', 'string', 'max:4000'],
             'form.termsAccepted' => ['nullable', 'boolean'],
-            'form.paymentType' => ['required', Rule::in(['hourly', 'perface'])],
+            'form.paymentType' => ['required', Rule::in(['hourly', 'perface', 'package'])],
             'form.rate' => ['required', 'numeric', 'min:0'],
             'form.hours' => ['required', 'numeric', 'min:0'],
             'form.pricePerFace' => ['required', 'numeric', 'min:0'],
             'form.numFaces' => ['required', 'numeric', 'min:0'],
+            'form.packageHours' => ['required', 'numeric', 'min:0'],
+            'form.packageBaseAmount' => ['required', 'numeric', 'min:0'],
+            'form.selectedAddOns' => ['nullable', 'array', 'max:20'],
+            'form.selectedAddOns.*' => ['string', 'max:80'],
+            'form.customAddOns' => ['nullable', 'array', 'max:20'],
+            'form.customAddOns.*.name' => ['nullable', 'string', 'max:80'],
+            'form.customAddOns.*.amount' => ['nullable', 'numeric', 'min:0'],
             'form.includeSetup' => ['required', 'boolean'],
             'form.setupRate' => ['required', 'numeric', 'min:0'],
             'form.setupHours' => ['required', 'numeric', 'min:0'],
@@ -161,6 +172,36 @@ class CalculatorSettings
                 'hours' => (float) data_get($settings, 'form.hours', 0),
                 'pricePerFace' => (float) data_get($settings, 'form.pricePerFace', 0),
                 'numFaces' => (float) data_get($settings, 'form.numFaces', 0),
+                'packageHours' => (float) data_get($settings, 'form.packageHours', 0),
+                'packageBaseAmount' => (float) data_get($settings, 'form.packageBaseAmount', 0),
+                'selectedAddOns' => collect(data_get($settings, 'form.selectedAddOns', []))
+                    ->map(fn (mixed $value): string => mb_substr(trim((string) $value), 0, 80))
+                    ->filter(fn (string $value): bool => $value !== '')
+                    ->unique()
+                    ->take(20)
+                    ->values()
+                    ->all(),
+                'customAddOns' => collect(data_get($settings, 'form.customAddOns', []))
+                    ->map(function (mixed $value): ?array {
+                        if (! is_array($value)) {
+                            return null;
+                        }
+
+                        $name = mb_substr(trim((string) ($value['name'] ?? '')), 0, 80);
+
+                        if ($name === '') {
+                            return null;
+                        }
+
+                        return [
+                            'name' => $name,
+                            'amount' => max(0.0, (float) ($value['amount'] ?? 0)),
+                        ];
+                    })
+                    ->filter()
+                    ->take(20)
+                    ->values()
+                    ->all(),
                 'includeSetup' => (bool) data_get($settings, 'form.includeSetup', false),
                 'setupRate' => (float) data_get($settings, 'form.setupRate', 0),
                 'setupHours' => (float) data_get($settings, 'form.setupHours', 0),

@@ -9,7 +9,7 @@ defineOptions({
 const packages = [
     {
         name: 'Mini Party Sparkle',
-        price: 'From $240',
+        price: 'From $260',
         duration: '2 hours',
         capacity: 'Up to 20 kids',
         bestFor: 'Home birthdays and tighter party schedules',
@@ -25,7 +25,7 @@ const packages = [
     },
     {
         name: 'Festival Crowd Package',
-        price: 'From $480',
+        price: 'From $520',
         duration: '4+ hours',
         capacity: 'High volume queue events',
         bestFor: 'Markets, fairs, and community days',

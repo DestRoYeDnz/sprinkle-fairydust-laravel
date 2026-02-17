@@ -1,16 +1,80 @@
 <script setup>
-import { Head } from '@inertiajs/vue3';
-import { computed, onMounted, ref } from 'vue';
+import { Head, Link } from '@inertiajs/vue3';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import AdminMenu from '@/components/admin/AdminMenu.vue';
+import { csrfHeaders, fetchWithCsrfRetry, withCsrfToken } from '@/lib/csrf';
 import SprinkleLayout from '../../layouts/SprinkleLayout.vue';
 
 defineOptions({
     layout: SprinkleLayout,
 });
 
+const packageOptions = [
+    {
+        name: 'Mini Party Sparkle',
+        hours: 2,
+        baseAmount: 260,
+        guestGuide: 'Up to 20 kids',
+        summary: 'Great for smaller birthday groups and short sessions.',
+        features: [
+            'Quick queue-friendly face designs',
+            'Glitter finish options included',
+            'Ideal for intimate birthday setups',
+        ],
+    },
+    {
+        name: 'Classic Birthday Magic',
+        hours: 3,
+        baseAmount: 360,
+        guestGuide: 'Around 30 kids',
+        summary: 'Best all-round package for party flow and full variety.',
+        features: [
+            'Full design menu for mixed age groups',
+            'Balanced pacing for party schedules',
+            'Most popular birthday package',
+        ],
+    },
+    {
+        name: 'Festival Crowd Package',
+        hours: 4,
+        baseAmount: 520,
+        guestGuide: 'Large public events',
+        summary: 'Built for schools, markets, fairs, and high-volume lines.',
+        features: [
+            'High-throughput design flow',
+            'Flexible timing for peak periods',
+            'Best for community and public events',
+        ],
+    },
+];
+
+const addOnOptions = [
+    {
+        name: 'Premium Glitter Bar',
+        amount: 65,
+        summary: 'Extra sparkle station for guests who want glitter-only looks.',
+    },
+    {
+        name: 'Festival Gems',
+        amount: 55,
+        summary: 'Adhesive face gems and jewels for standout photos.',
+    },
+    {
+        name: 'Express Queue Upgrade',
+        amount: 95,
+        summary: 'Fast-design menu for high-volume events.',
+    },
+    {
+        name: 'Theme-Matched Design Set',
+        amount: 75,
+        summary: 'Design board tailored to your event theme.',
+    },
+];
+
+const defaultPackage = packageOptions[1];
+
 const settingsLoading = ref(false);
 const settingsError = ref('');
-const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 
 function defaultCalculatorSettings() {
     return {
@@ -44,6 +108,10 @@ function defaultCalculatorSettings() {
             hours: 8,
             pricePerFace: 10,
             numFaces: 30,
+            packageHours: defaultPackage.hours,
+            packageBaseAmount: defaultPackage.baseAmount,
+            selectedAddOns: [],
+            customAddOns: [],
             includeSetup: false,
             setupRate: 60,
             setupHours: 2,
@@ -69,10 +137,14 @@ const notification = ref('');
 const savingQuote = ref(false);
 const saveQuoteSuccess = ref('');
 const saveQuoteError = ref('');
+const sourceQuoteId = ref('');
+const quoteOutputPanelRef = ref(null);
 
 const result = ref({
     baseLine: '',
     baseAmount: 0,
+    addOnsLine: '',
+    addOnsAmount: 0,
     setupLine: '',
     setupAmount: 0,
     travelLine: '',
@@ -93,10 +165,144 @@ const canSaveQuote = computed(() => {
     return name.length > 0 && email.length > 0;
 });
 
+const backToQuoteId = computed(() => {
+    const quoteId = String(sourceQuoteId.value ?? '').trim();
+
+    return quoteId;
+});
+
+const backToQuoteHref = computed(() => {
+    if (!backToQuoteId.value) {
+        return '/admin/quotes';
+    }
+
+    const params = new URLSearchParams({
+        quote_id: backToQuoteId.value,
+    });
+
+    return `/admin/quotes?${params.toString()}#quote-${encodeURIComponent(backToQuoteId.value)}`;
+});
+
+const backToQuoteLabel = computed(() => {
+    if (!backToQuoteId.value) {
+        return 'Back to Quotes';
+    }
+
+    return `Back to Quote #${backToQuoteId.value}`;
+});
+
 function toNumber(value) {
     const number = Number(value);
     return Number.isFinite(number) ? number : 0;
 }
+
+function normalizeAddOnSelection(value) {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return [...new Set(value
+        .map((item) => String(item ?? '').trim())
+        .filter(Boolean)
+        .slice(0, 20))];
+}
+
+function normalizeCustomAddOns(value) {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value
+        .map((item) => {
+            if (!item || typeof item !== 'object') {
+                return null;
+            }
+
+            const name = String(item.name ?? '').trim().slice(0, 80);
+            const amount = Math.max(0, toNumber(item.amount));
+
+            if (!name) {
+                return null;
+            }
+
+            return {
+                name,
+                amount,
+            };
+        })
+        .filter(Boolean)
+        .slice(0, 20);
+}
+
+function selectedPackageOption() {
+    const packageName = String(form.value.packageName ?? '').trim();
+
+    return packageOptions.find((item) => item.name === packageName) ?? null;
+}
+
+function resolvedAddOnItems() {
+    const selectedNames = normalizeAddOnSelection(form.value.selectedAddOns);
+    const selectedItems = addOnOptions
+        .filter((item) => selectedNames.includes(item.name))
+        .map((item) => ({
+            name: item.name,
+            amount: toNumber(item.amount),
+        }));
+    const customItems = normalizeCustomAddOns(form.value.customAddOns);
+
+    return [...selectedItems, ...customItems];
+}
+
+function formatAddOnList(items) {
+    if (!items.length) {
+        return '';
+    }
+
+    return items
+        .map((item) => `${item.name} ($${toNumber(item.amount).toFixed(2)})`)
+        .join(', ');
+}
+
+function applyPackagePreset(packageName) {
+    const option = packageOptions.find((item) => item.name === packageName);
+
+    if (!option) {
+        return;
+    }
+
+    form.value.packageName = option.name;
+    form.value.packageHours = option.hours;
+    form.value.packageBaseAmount = option.baseAmount;
+}
+
+function togglePresetAddOn(addOnName) {
+    const selected = normalizeAddOnSelection(form.value.selectedAddOns);
+
+    if (selected.includes(addOnName)) {
+        form.value.selectedAddOns = selected.filter((item) => item !== addOnName);
+        return;
+    }
+
+    form.value.selectedAddOns = [...selected, addOnName];
+}
+
+function addCustomAddOnRow() {
+    const current = Array.isArray(form.value.customAddOns) ? form.value.customAddOns : [];
+
+    form.value.customAddOns = [...current, { name: '', amount: 0 }];
+}
+
+function removeCustomAddOnRow(index) {
+    if (!Array.isArray(form.value.customAddOns)) {
+        form.value.customAddOns = [];
+        return;
+    }
+
+    form.value.customAddOns = form.value.customAddOns.filter((_, rowIndex) => rowIndex !== index);
+}
+
+const selectedPackage = computed(() => selectedPackageOption());
+const selectedAddOnSummary = computed(() => formatAddOnList(resolvedAddOnItems()));
 
 function normalizeCalculatorSettings(source) {
     const payload = source && typeof source === 'object' ? source : {};
@@ -128,13 +334,17 @@ function normalizeCalculatorSettings(source) {
             eventAddress: String(payloadForm.eventAddress ?? defaults.form.eventAddress),
             notes: String(payloadForm.notes ?? defaults.form.notes),
             termsAccepted: Boolean(payloadForm.termsAccepted ?? defaults.form.termsAccepted),
-            paymentType: ['hourly', 'perface'].includes(String(payloadForm.paymentType))
+            paymentType: ['hourly', 'perface', 'package'].includes(String(payloadForm.paymentType))
                 ? String(payloadForm.paymentType)
                 : defaults.form.paymentType,
             rate: toNumber(payloadForm.rate ?? defaults.form.rate),
             hours: toNumber(payloadForm.hours ?? defaults.form.hours),
             pricePerFace: toNumber(payloadForm.pricePerFace ?? defaults.form.pricePerFace),
             numFaces: toNumber(payloadForm.numFaces ?? defaults.form.numFaces),
+            packageHours: toNumber(payloadForm.packageHours ?? defaults.form.packageHours),
+            packageBaseAmount: toNumber(payloadForm.packageBaseAmount ?? defaults.form.packageBaseAmount),
+            selectedAddOns: normalizeAddOnSelection(payloadForm.selectedAddOns ?? defaults.form.selectedAddOns),
+            customAddOns: normalizeCustomAddOns(payloadForm.customAddOns ?? defaults.form.customAddOns),
             includeSetup: Boolean(payloadForm.includeSetup ?? defaults.form.includeSetup),
             setupRate: toNumber(payloadForm.setupRate ?? defaults.form.setupRate),
             setupHours: toNumber(payloadForm.setupHours ?? defaults.form.setupHours),
@@ -191,6 +401,7 @@ async function loadCalculatorSettings() {
 function applyQueryParams() {
     const params = new URLSearchParams(window.location.search);
 
+    const quoteId = params.get('quote_id') ?? '';
     const name = params.get('name') ?? '';
     const email = params.get('email') ?? '';
     const date = params.get('date') ?? '';
@@ -209,6 +420,10 @@ function applyQueryParams() {
     const heardAbout = params.get('heard_about') ?? '';
     const address = params.get('address') ?? '';
     const notes = params.get('notes') ?? '';
+
+    if (quoteId) {
+        sourceQuoteId.value = quoteId;
+    }
 
     if (name) {
         form.value.organizerName = name;
@@ -244,6 +459,7 @@ function applyQueryParams() {
 
     if (packageName) {
         form.value.packageName = packageName;
+        applyPackagePreset(packageName);
     }
 
     if (services) {
@@ -275,7 +491,7 @@ function applyQueryParams() {
     }
 
     if (type) {
-        const paymentMatch = ['hourly', 'perface'].includes(type.toLowerCase())
+        const paymentMatch = ['hourly', 'perface', 'package'].includes(type.toLowerCase())
             ? type.toLowerCase()
             : null;
 
@@ -295,20 +511,39 @@ function calculateTotal() {
     saveQuoteError.value = '';
 
     const paymentMode = form.value.paymentType;
+    const addOnItems = resolvedAddOnItems();
+    const addOnTotal = addOnItems.reduce((sum, item) => sum + toNumber(item.amount), 0);
+    const addOnLine = addOnItems.length
+        ? `Add-ons: ${formatAddOnList(addOnItems)} = $${addOnTotal.toFixed(2)}`
+        : '';
 
     let baseTotal = 0;
     let baseLine = '';
+    let hoursDisplay = toNumber(form.value.hours);
+    let eventSummary = '';
 
     if (paymentMode === 'hourly') {
         const rate = toNumber(form.value.rate);
         const hours = toNumber(form.value.hours);
         baseTotal = rate * hours;
         baseLine = `Hourly: ${hours} hours × $${rate.toFixed(2)} = $${baseTotal.toFixed(2)}`;
-    } else {
+        hoursDisplay = hours;
+        eventSummary = `Hours: ${hours} · Rate: $${rate.toFixed(2)}/hr`;
+    } else if (paymentMode === 'perface') {
         const pricePerFace = toNumber(form.value.pricePerFace);
         const numFaces = toNumber(form.value.numFaces);
         baseTotal = pricePerFace * numFaces;
         baseLine = `Per Face: ${numFaces} faces × $${pricePerFace.toFixed(2)} = $${baseTotal.toFixed(2)}`;
+        eventSummary = `Per Face: ${numFaces} faces`;
+    } else {
+        const packageName = String(form.value.packageName ?? '').trim() || 'Custom Package';
+        const packageHours = toNumber(form.value.packageHours);
+        const packageAmount = toNumber(form.value.packageBaseAmount);
+        const hoursText = packageHours > 0 ? `${packageHours} hours` : 'hours TBC';
+        baseTotal = packageAmount;
+        baseLine = `Package: ${packageName} (${hoursText}) = $${packageAmount.toFixed(2)}`;
+        hoursDisplay = packageHours;
+        eventSummary = `Package: ${packageName} · ${hoursText}`;
     }
 
     const setupRate = toNumber(form.value.setupRate);
@@ -334,17 +569,18 @@ function calculateTotal() {
         travelLine = `Travel (flat): $${flatTravel.toFixed(2)}`;
     }
 
-    const subtotal = baseTotal + setupTotal + travelTotal;
+    const baseAmount = baseTotal + addOnTotal;
+    const subtotal = baseAmount + setupTotal + travelTotal;
     const gstAmount = form.value.includeGST ? subtotal * 0.15 : 0;
     const total = subtotal + gstAmount;
-
-    const hourlyHours = toNumber(form.value.hours);
     const startDisplay = form.value.startTime || '—';
     const endDisplay = form.value.endTime || '—';
 
     result.value = {
         baseLine,
-        baseAmount: baseTotal,
+        baseAmount,
+        addOnsLine: addOnLine,
+        addOnsAmount: addOnTotal,
         setupLine,
         setupAmount: setupTotal,
         travelLine,
@@ -354,14 +590,23 @@ function calculateTotal() {
         total,
         startDisplay,
         endDisplay,
-        hoursDisplay: hourlyHours,
-        eventSummary:
-            paymentMode === 'hourly'
-                ? `Hours: ${hourlyHours} · Rate: $${toNumber(form.value.rate).toFixed(2)}/hr`
-                : `Per Face: ${toNumber(form.value.numFaces)} faces`,
+        hoursDisplay,
+        eventSummary,
     };
 
     showResult.value = true;
+    scrollToQuoteOutput();
+}
+
+function scrollToQuoteOutput() {
+    nextTick(() => {
+        window.requestAnimationFrame(() => {
+            quoteOutputPanelRef.value?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+            });
+        });
+    });
 }
 
 const quoteText = computed(() => {
@@ -395,6 +640,10 @@ const quoteText = computed(() => {
         lines.push(`Services: ${form.value.servicesRequested}`);
     }
 
+    if (selectedAddOnSummary.value) {
+        lines.push(`Add-ons: ${selectedAddOnSummary.value}`);
+    }
+
     if (form.value.travelArea) {
         lines.push(`Travel Area: ${form.value.travelArea}`);
     }
@@ -422,6 +671,10 @@ const quoteText = computed(() => {
     lines.push(`Total Hours: ${result.value.hoursDisplay}`);
     lines.push('');
     lines.push(result.value.baseLine);
+
+    if (result.value.addOnsLine) {
+        lines.push(result.value.addOnsLine);
+    }
 
     if (result.value.setupLine) {
         lines.push(result.value.setupLine);
@@ -495,6 +748,14 @@ function quotePayload() {
         .split(',')
         .map((item) => item.trim())
         .filter(Boolean);
+    const addOnServices = resolvedAddOnItems().map((item) => {
+        const amount = toNumber(item.amount);
+
+        return amount > 0
+            ? `Add-on: ${item.name} ($${amount.toFixed(2)})`
+            : `Add-on: ${item.name}`;
+    });
+    const mergedServices = [...new Set([...servicesRequested, ...addOnServices])].slice(0, 20);
 
     return {
         name: String(form.value.organizerName ?? '').trim(),
@@ -502,7 +763,7 @@ function quotePayload() {
         phone: String(form.value.organizerPhone ?? '').trim() || null,
         guest_count: toNumber(form.value.guestCount) > 0 ? Math.round(toNumber(form.value.guestCount)) : null,
         package_name: String(form.value.packageName ?? '').trim() || null,
-        services_requested: servicesRequested.length ? servicesRequested : null,
+        services_requested: mergedServices.length ? mergedServices : null,
         travel_area: String(form.value.travelArea ?? '').trim() || null,
         venue_type: String(form.value.venueType ?? '').trim() || null,
         heard_about: String(form.value.heardAbout ?? '').trim() || null,
@@ -519,7 +780,7 @@ function quotePayload() {
         calc_setup_amount: Number(result.value.setupAmount.toFixed(2)),
         calc_travel_amount: Number(result.value.travelAmount.toFixed(2)),
         calc_subtotal: Number(result.value.subtotal.toFixed(2)),
-        calc_gst_amount: Number(result.value.gstAmount.toFixed(2)),
+        calc_gst_amount: form.value.includeGST ? Number(result.value.gstAmount.toFixed(2)) : null,
         calc_total_amount: Number(result.value.total.toFixed(2)),
     };
 }
@@ -541,14 +802,11 @@ async function saveQuote() {
     savingQuote.value = true;
 
     try {
-        const response = await fetch('/admin/quotes', {
+        const response = await fetchWithCsrfRetry('/admin/quotes', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-            },
-            body: JSON.stringify(quotePayload()),
+            credentials: 'same-origin',
+            headers: csrfHeaders(),
+            body: JSON.stringify(withCsrfToken(quotePayload())),
         });
 
         const data = await response.json();
@@ -561,6 +819,11 @@ async function saveQuote() {
                 'Failed to save quote.';
 
             return;
+        }
+
+        const savedQuoteId = data?.quote?.id;
+        if (savedQuoteId !== undefined && savedQuoteId !== null && savedQuoteId !== '') {
+            sourceQuoteId.value = String(savedQuoteId);
         }
 
         saveQuoteSuccess.value = 'Quote saved to admin quotes.';
@@ -708,6 +971,7 @@ onMounted(async () => {
                                 <select v-model="form.paymentType" class="input">
                                     <option value="hourly">Organizer-Paid (Hourly)</option>
                                     <option value="perface">Pay Per Face</option>
+                                    <option value="package">Package</option>
                                 </select>
                             </label>
 
@@ -720,13 +984,95 @@ onMounted(async () => {
                                 </label>
                             </div>
 
-                            <div v-else class="grid gap-4 md:grid-cols-2">
+                            <div v-else-if="form.paymentType === 'perface'" class="grid gap-4 md:grid-cols-2">
                                 <label class="field-label">Price per Face ($)
                                     <input v-model="form.pricePerFace" type="number" min="0" class="input" />
                                 </label>
                                 <label class="field-label">Expected Faces
                                     <input v-model="form.numFaces" type="number" min="0" class="input" />
                                 </label>
+                            </div>
+
+                            <div v-else class="space-y-4">
+                                <label class="field-label">Package Preset
+                                    <select
+                                        class="input"
+                                        :value="selectedPackage?.name || ''"
+                                        @change="applyPackagePreset(($event.target && $event.target.value) ? String($event.target.value) : '')"
+                                    >
+                                        <option value="">Choose from presets</option>
+                                        <option v-for="item in packageOptions" :key="item.name" :value="item.name">
+                                            {{ item.name }} ({{ item.hours }} hrs, ${{ item.baseAmount.toFixed(2) }})
+                                        </option>
+                                    </select>
+                                </label>
+
+                                <div class="grid gap-4 md:grid-cols-2">
+                                    <label class="field-label">Package Name
+                                        <input v-model="form.packageName" type="text" class="input" />
+                                    </label>
+                                    <label class="field-label">Package Base Amount ($)
+                                        <input v-model="form.packageBaseAmount" type="number" min="0" step="0.01" class="input" />
+                                    </label>
+                                    <label class="field-label">Package Hours
+                                        <input v-model="form.packageHours" type="number" min="0" step="0.25" class="input" />
+                                    </label>
+                                </div>
+
+                                <div v-if="selectedPackage" class="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-slate-700">
+                                    <p class="font-semibold text-sky-800">
+                                        {{ selectedPackage.name }} · {{ selectedPackage.hours }} hours · {{ selectedPackage.guestGuide }}
+                                    </p>
+                                    <p class="mt-1 text-slate-600">{{ selectedPackage.summary }}</p>
+                                    <ul class="mt-2 list-disc pl-5 text-xs text-slate-600">
+                                        <li v-for="feature in selectedPackage.features" :key="`${selectedPackage.name}-${feature}`">{{ feature }}</li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                <p class="text-sm font-semibold text-slate-800">Preset Add-ons</p>
+
+                                <div class="mt-3 grid gap-3 md:grid-cols-2">
+                                    <button
+                                        v-for="addOn in addOnOptions"
+                                        :key="addOn.name"
+                                        type="button"
+                                        class="addon-option"
+                                        :class="{ 'addon-option--active': form.selectedAddOns.includes(addOn.name) }"
+                                        @click="togglePresetAddOn(addOn.name)"
+                                    >
+                                        <span class="addon-option__title">{{ addOn.name }}</span>
+                                        <span class="addon-option__amount">${{ addOn.amount.toFixed(2) }}</span>
+                                        <span class="addon-option__copy">{{ addOn.summary }}</span>
+                                    </button>
+                                </div>
+
+                                <div class="mt-4 space-y-2">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <p class="text-sm font-semibold text-slate-800">Custom Add-ons</p>
+                                        <button type="button" class="secondary-btn secondary-btn--small" @click="addCustomAddOnRow">
+                                            Add Custom Add-on
+                                        </button>
+                                    </div>
+
+                                    <p v-if="!form.customAddOns.length" class="text-xs text-slate-500">No custom add-ons added yet.</p>
+
+                                    <div v-for="(addOn, index) in form.customAddOns" :key="`custom-addon-${index}`" class="grid gap-2 md:grid-cols-[1fr_160px_auto]">
+                                        <input v-model="addOn.name" type="text" class="input" placeholder="Add-on name" />
+                                        <input
+                                            v-model.number="addOn.amount"
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            class="input"
+                                            placeholder="Amount"
+                                        />
+                                        <button type="button" class="secondary-btn secondary-btn--small" @click="removeCustomAddOnRow(index)">
+                                            Remove
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -800,7 +1146,7 @@ onMounted(async () => {
                     </form>
                 </section>
 
-                <section class="panel h-fit lg:sticky lg:top-6">
+                <section ref="quoteOutputPanelRef" class="panel h-fit lg:sticky lg:top-6">
                     <h2 class="mb-1 text-xl font-semibold text-sky-700">Quote Output</h2>
                     <p class="mb-5 text-sm text-slate-500">Preview totals and copy formatted quote text.</p>
 
@@ -817,6 +1163,7 @@ onMounted(async () => {
                             <p class="mt-1"><strong>Guest Count:</strong> {{ form.guestCount || '—' }}</p>
                             <p class="mt-1"><strong>Package:</strong> {{ form.packageName || '—' }}</p>
                             <p class="mt-1"><strong>Services:</strong> {{ form.servicesRequested || '—' }}</p>
+                            <p class="mt-1"><strong>Add-ons:</strong> {{ selectedAddOnSummary || '—' }}</p>
                             <p class="mt-1"><strong>Travel Area:</strong> {{ form.travelArea || '—' }}</p>
                             <p class="mt-1"><strong>Venue Type:</strong> {{ form.venueType || '—' }}</p>
                             <p class="mt-1"><strong>Heard About Us:</strong> {{ form.heardAbout || '—' }}</p>
@@ -824,6 +1171,7 @@ onMounted(async () => {
                             <p class="mt-1"><strong>Notes:</strong> {{ form.notes || '—' }}</p>
                             <p class="mt-1"><strong>Terms Accepted:</strong> {{ form.termsAccepted ? 'Yes' : 'No' }}</p>
                             <p><strong>Base:</strong> {{ result.baseLine }}</p>
+                            <p v-if="result.addOnsLine" class="mt-1"><strong>Add-ons:</strong> {{ result.addOnsLine }}</p>
                             <p v-if="result.setupLine" class="mt-1"><strong>Setup:</strong> {{ result.setupLine }}</p>
                             <p class="mt-1"><strong>Travel:</strong> {{ result.travelLine }}</p>
                             <p class="mt-1"><strong>Subtotal:</strong> ${{ result.subtotal.toFixed(2) }}</p>
@@ -850,6 +1198,9 @@ onMounted(async () => {
                             <button type="button" class="secondary-btn" :disabled="savingQuote" @click="saveQuote">
                                 {{ savingQuote ? 'Saving...' : 'Save Quote' }}
                             </button>
+                            <Link :href="backToQuoteHref" class="secondary-btn">
+                                {{ backToQuoteLabel }}
+                            </Link>
                         </div>
 
                         <p v-if="!canSaveQuote" class="text-xs font-semibold text-amber-700">
@@ -927,6 +1278,45 @@ onMounted(async () => {
     transform: translateY(-1px);
 }
 
+.addon-option {
+    display: grid;
+    gap: 0.25rem;
+    border-radius: 0.9rem;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    padding: 0.7rem 0.8rem;
+    text-align: left;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.addon-option:hover {
+    border-color: #7dd3fc;
+}
+
+.addon-option--active {
+    border-color: #0ea5e9;
+    background: #f0f9ff;
+    box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.15);
+}
+
+.addon-option__title {
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.addon-option__amount {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #0369a1;
+}
+
+.addon-option__copy {
+    font-size: 0.74rem;
+    line-height: 1.3;
+    color: #475569;
+}
+
 .secondary-btn {
     display: inline-flex;
     align-items: center;
@@ -943,5 +1333,10 @@ onMounted(async () => {
 .secondary-btn:hover {
     background: #f1f5f9;
     border-color: #94a3b8;
+}
+
+.secondary-btn--small {
+    padding: 0.45rem 0.7rem;
+    font-size: 0.74rem;
 }
 </style>

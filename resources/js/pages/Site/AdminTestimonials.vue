@@ -3,13 +3,12 @@ import { Head } from '@inertiajs/vue3';
 import { onMounted, ref } from 'vue';
 import AdminMenu from '@/components/admin/AdminMenu.vue';
 import ConfirmDialog from '@/components/admin/ConfirmDialog.vue';
+import { csrfHeaders, fetchWithCsrfRetry, withCsrfToken } from '@/lib/csrf';
 import SprinkleLayout from '../../layouts/SprinkleLayout.vue';
 
 defineOptions({
     layout: SprinkleLayout,
 });
-
-const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 
 const loading = ref(false);
 const loadError = ref('');
@@ -118,19 +117,16 @@ async function createTestimonial() {
     createSuccess.value = '';
 
     try {
-        const response = await fetch('/admin/testimonials', {
+        const response = await fetchWithCsrfRetry('/admin/testimonials', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-            },
-            body: JSON.stringify({
+            credentials: 'same-origin',
+            headers: csrfHeaders(),
+            body: JSON.stringify(withCsrfToken({
                 name: createForm.value.name,
                 testimonial: createForm.value.testimonial,
                 urls: parseUrls(createForm.value.urlsText),
                 is_approved: createForm.value.is_approved,
-            }),
+            })),
         });
 
         const data = await response.json();
@@ -179,19 +175,16 @@ async function saveTestimonial(item) {
     item._error = '';
 
     try {
-        const response = await fetch(`/admin/testimonials/${item.id}`, {
+        const response = await fetchWithCsrfRetry(`/admin/testimonials/${item.id}`, {
             method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-            },
-            body: JSON.stringify({
+            credentials: 'same-origin',
+            headers: csrfHeaders(),
+            body: JSON.stringify(withCsrfToken({
                 name: item._draft.name,
                 testimonial: item._draft.testimonial,
                 urls: parseUrls(item._draft.urlsText),
                 is_approved: item._draft.is_approved,
-            }),
+            })),
         });
 
         const data = await response.json();
@@ -218,19 +211,16 @@ async function setApproval(item, isApproved) {
     item._error = '';
 
     try {
-        const response = await fetch(`/admin/testimonials/${item.id}`, {
+        const response = await fetchWithCsrfRetry(`/admin/testimonials/${item.id}`, {
             method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-            },
-            body: JSON.stringify({
+            credentials: 'same-origin',
+            headers: csrfHeaders(),
+            body: JSON.stringify(withCsrfToken({
                 name: item.name,
                 testimonial: item.testimonial,
                 urls: item.urls,
                 is_approved: isApproved,
-            }),
+            })),
         });
 
         const data = await response.json();
@@ -266,12 +256,11 @@ async function deleteTestimonial() {
     item._error = '';
 
     try {
-        const response = await fetch(`/admin/testimonials/${item.id}`, {
+        const response = await fetchWithCsrfRetry(`/admin/testimonials/${item.id}`, {
             method: 'DELETE',
-            headers: {
-                Accept: 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-            },
+            credentials: 'same-origin',
+            headers: csrfHeaders(),
+            body: JSON.stringify(withCsrfToken({})),
         });
 
         const data = await response.json();

@@ -1,6 +1,7 @@
 <script setup>
 import { Link, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
+import { logout } from '@/routes';
 
 const page = usePage();
 
@@ -46,12 +47,21 @@ watch(currentPath, () => {
     >
         <div class="mb-3 flex items-center justify-between gap-3">
             <p class="text-xs font-bold tracking-[0.14em] text-slate-500 uppercase">Admin Menu</p>
-            <Link
-                href="/"
-                class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:bg-sky-50"
-            >
-                Home
-            </Link>
+            <div class="flex items-center gap-2">
+                <Link
+                    href="/"
+                    class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:bg-sky-50"
+                >
+                    Home
+                </Link>
+                <Link
+                    :href="logout()"
+                    as="button"
+                    class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:border-rose-300 hover:bg-rose-100"
+                >
+                    Log out
+                </Link>
+            </div>
         </div>
 
         <button

@@ -37,11 +37,17 @@ it('allows admin users to update calculator settings', function () {
             'eventDate' => '2026-03-04',
             'startTime' => '09:00',
             'endTime' => '13:00',
-            'paymentType' => 'perface',
+            'paymentType' => 'package',
             'rate' => 130,
             'hours' => 4,
             'pricePerFace' => 15,
             'numFaces' => 45,
+            'packageHours' => 3,
+            'packageBaseAmount' => 390,
+            'selectedAddOns' => ['Premium Glitter Bar'],
+            'customAddOns' => [
+                ['name' => 'Extra Artist', 'amount' => 120],
+            ],
             'includeSetup' => true,
             'setupRate' => 65,
             'setupHours' => 1.5,
@@ -62,7 +68,8 @@ it('allows admin users to update calculator settings', function () {
     $response->assertOk();
     $response->assertJsonPath('success', true);
     $response->assertJsonPath('settings.artist.name', 'Sprinkle Team');
-    $response->assertJsonPath('settings.form.paymentType', 'perface');
+    $response->assertJsonPath('settings.form.paymentType', 'package');
+    $response->assertJsonPath('settings.form.packageBaseAmount', 390);
     $response->assertJsonPath('settings.form.includeGST', false);
 
     $setting = AdminSetting::query()
@@ -72,6 +79,7 @@ it('allows admin users to update calculator settings', function () {
     expect($setting)->not->toBeNull();
     expect(data_get($setting?->value, 'artist.name'))->toBe('Sprinkle Team');
     expect(data_get($setting?->value, 'form.travelType'))->toBe('flat');
+    expect(data_get($setting?->value, 'form.paymentType'))->toBe('package');
     expect(data_get($setting?->value, 'form.flatTravel'))->toBe(40);
 });
 

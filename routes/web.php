@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\TrackingStatsController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Api\AdminUploadController;
 use App\Http\Controllers\Api\EventController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -27,12 +28,25 @@ Route::get('designs', fn () => Inertia::render('Site/Designs'))->name('designs')
 Route::get('testimonials', fn () => Inertia::render('Site/Testimonials'))->name('testimonials');
 Route::get('add-testimonial', fn () => Inertia::render('Site/AddTestimonial'))->name('add-testimonial');
 Route::get('quote', fn () => Inertia::render('Site/Quote'))->name('quote');
+Route::get('csrf-token', function (Request $request) {
+    $request->session()->regenerateToken();
+
+    return response()->json([
+        'token' => csrf_token(),
+    ]);
+})->name('csrf.token');
 Route::get('quotes/{quote}/confirm', [QuoteManagementController::class, 'confirmFromEmail'])
     ->middleware('signed')
     ->name('quotes.confirm');
 Route::get('quotes/{quote}/open', [QuoteManagementController::class, 'trackEmailOpen'])
     ->middleware('signed')
     ->name('quotes.open');
+Route::get('quotes/{quote}/suggest-time', [QuoteManagementController::class, 'showSuggestedTimeForm'])
+    ->middleware('signed')
+    ->name('quotes.suggest-time');
+Route::post('quotes/{quote}/suggest-time', [QuoteManagementController::class, 'submitSuggestedTime'])
+    ->middleware('signed')
+    ->name('quotes.suggest-time.submit');
 
 Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('admin', fn () => Inertia::render('Site/Admin'))->name('admin');
@@ -50,6 +64,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::put('admin/quotes/{quote}', [QuoteManagementController::class, 'update'])->name('admin.quotes.update');
     Route::delete('admin/quotes/{quote}', [QuoteManagementController::class, 'destroy'])->name('admin.quotes.destroy');
     Route::post('admin/quotes/{quote}/send-email', [QuoteManagementController::class, 'sendEmail'])->name('admin.quotes.send-email');
+    Route::post('admin/quotes/{quote}/decline', [QuoteManagementController::class, 'decline'])->name('admin.quotes.decline');
 
     Route::get('admin/testimonials/list', [TestimonialManagementController::class, 'index'])->name('admin.testimonials.index');
     Route::post('admin/testimonials', [TestimonialManagementController::class, 'store'])->name('admin.testimonials.store');

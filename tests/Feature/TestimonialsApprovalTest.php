@@ -28,7 +28,9 @@ it('stores public testimonials as pending approval', function () {
 
     Mail::assertSent(StyledHtmlMail::class, function (StyledHtmlMail $mail): bool {
         return $mail->hasTo('brettj@dekode.co.nz')
-            && str_contains($mail->mailSubject, 'New Testimonial Submission');
+            && str_contains($mail->mailSubject, 'New Testimonial Submission')
+            && str_contains($mail->htmlContent, 'Sprinkle Fairydust Face Painting')
+            && str_contains($mail->htmlContent, 'Open Admin Testimonials');
     });
 });
 

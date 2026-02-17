@@ -2,13 +2,12 @@
 import { Head } from '@inertiajs/vue3';
 import { onMounted, ref } from 'vue';
 import AdminMenu from '@/components/admin/AdminMenu.vue';
+import { csrfHeaders, fetchWithCsrfRetry, withCsrfToken } from '@/lib/csrf';
 import SprinkleLayout from '../../layouts/SprinkleLayout.vue';
 
 defineOptions({
     layout: SprinkleLayout,
 });
-
-const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
 
 const loading = ref(false);
 const saving = ref(false);
@@ -50,6 +49,10 @@ function defaultSettings() {
             hours: 8,
             pricePerFace: 10,
             numFaces: 30,
+            packageHours: 3,
+            packageBaseAmount: 360,
+            selectedAddOns: [],
+            customAddOns: [],
             includeSetup: false,
             setupRate: 60,
             setupHours: 2,
@@ -69,6 +72,44 @@ function toNumber(value, fallback = 0) {
     const number = Number(value);
 
     return Number.isFinite(number) ? number : fallback;
+}
+
+function normalizeStringArray(value) {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return [...new Set(value
+        .map((item) => String(item ?? '').trim())
+        .filter(Boolean)
+        .slice(0, 20))];
+}
+
+function normalizeCustomAddOns(value) {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value
+        .map((item) => {
+            if (!item || typeof item !== 'object') {
+                return null;
+            }
+
+            const name = String(item.name ?? '').trim().slice(0, 80);
+            const amount = Math.max(0, toNumber(item.amount, 0));
+
+            if (!name) {
+                return null;
+            }
+
+            return {
+                name,
+                amount,
+            };
+        })
+        .filter(Boolean)
+        .slice(0, 20);
 }
 
 function normalizeSettings(source) {
@@ -102,13 +143,17 @@ function normalizeSettings(source) {
             eventAddress: String(payloadForm.eventAddress ?? defaults.form.eventAddress),
             notes: String(payloadForm.notes ?? defaults.form.notes),
             termsAccepted: Boolean(payloadForm.termsAccepted ?? defaults.form.termsAccepted),
-            paymentType: ['hourly', 'perface'].includes(String(payloadForm.paymentType))
+            paymentType: ['hourly', 'perface', 'package'].includes(String(payloadForm.paymentType))
                 ? String(payloadForm.paymentType)
                 : defaults.form.paymentType,
             rate: toNumber(payloadForm.rate, defaults.form.rate),
             hours: toNumber(payloadForm.hours, defaults.form.hours),
             pricePerFace: toNumber(payloadForm.pricePerFace, defaults.form.pricePerFace),
             numFaces: toNumber(payloadForm.numFaces, defaults.form.numFaces),
+            packageHours: toNumber(payloadForm.packageHours, defaults.form.packageHours),
+            packageBaseAmount: toNumber(payloadForm.packageBaseAmount, defaults.form.packageBaseAmount),
+            selectedAddOns: normalizeStringArray(payloadForm.selectedAddOns ?? defaults.form.selectedAddOns),
+            customAddOns: normalizeCustomAddOns(payloadForm.customAddOns ?? defaults.form.customAddOns),
             includeSetup: Boolean(payloadForm.includeSetup ?? defaults.form.includeSetup),
             setupRate: toNumber(payloadForm.setupRate, defaults.form.setupRate),
             setupHours: toNumber(payloadForm.setupHours, defaults.form.setupHours),
@@ -158,14 +203,11 @@ async function saveSettings() {
     saveSuccess.value = '';
 
     try {
-        const response = await fetch('/admin/settings/calculator', {
+        const response = await fetchWithCsrfRetry('/admin/settings/calculator', {
             method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-            },
-            body: JSON.stringify(form.value),
+            credentials: 'same-origin',
+            headers: csrfHeaders(),
+            body: JSON.stringify(withCsrfToken(form.value)),
         });
 
         const data = await response.json();
@@ -333,6 +375,7 @@ onMounted(() => {
                             <select v-model="form.form.paymentType" class="input">
                                 <option value="hourly">Organizer-Paid (Hourly)</option>
                                 <option value="perface">Pay Per Face</option>
+                                <option value="package">Package</option>
                             </select>
                         </label>
                         <label class="field-label">
@@ -350,6 +393,14 @@ onMounted(() => {
                         <label class="field-label">
                             Expected Faces
                             <input v-model.number="form.form.numFaces" type="number" min="0" step="1" class="input" />
+                        </label>
+                        <label class="field-label">
+                            Package Base Amount ($)
+                            <input v-model.number="form.form.packageBaseAmount" type="number" min="0" step="0.01" class="input" />
+                        </label>
+                        <label class="field-label">
+                            Package Hours
+                            <input v-model.number="form.form.packageHours" type="number" min="0" step="0.25" class="input" />
                         </label>
                     </div>
 

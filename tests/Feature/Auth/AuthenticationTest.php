@@ -22,6 +22,21 @@ test('users can authenticate using the login screen', function () {
     $response->assertRedirect(config('fortify.home'));
 });
 
+test('users are redirected to admin home after login even with dashboard intended in session', function () {
+    $user = User::factory()->create();
+
+    $this->get(route('dashboard'))
+        ->assertRedirect(route('login'));
+
+    $response = $this->post(route('login.store'), [
+        'email' => $user->email,
+        'password' => 'password',
+    ]);
+
+    $this->assertAuthenticated();
+    $response->assertRedirect(config('fortify.home'));
+});
+
 test('users with two factor enabled are redirected to two factor challenge', function () {
     if (! Features::canManageTwoFactorAuthentication()) {
         $this->markTestSkipped('Two-factor authentication is not enabled.');

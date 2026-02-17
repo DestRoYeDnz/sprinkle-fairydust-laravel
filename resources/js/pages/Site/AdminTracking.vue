@@ -22,9 +22,16 @@ const stats = ref({
         total_time_seconds: 0,
         average_time_per_visitor_seconds: 0,
         quotes_with_tracking: 0,
+        quote_funnel_starts: 0,
+        quote_funnel_package_selections: 0,
+        quote_funnel_submissions: 0,
+        quote_funnel_conversion_rate: 0,
+        external_referrer_views: 0,
+        unique_external_referrers: 0,
     },
     country_views: [],
     page_views: [],
+    external_referrers: [],
     daily_views: [],
     quote_tracking: [],
 });
@@ -40,6 +47,12 @@ const overviewCards = computed(() => [
     { label: 'Total Time On Site', value: stats.value.overview.total_time_seconds, formatter: formatDuration },
     { label: 'Avg Time / Visitor', value: stats.value.overview.average_time_per_visitor_seconds, formatter: formatDuration },
     { label: 'Quotes Linked', value: stats.value.overview.quotes_with_tracking },
+    { label: 'Quote Starts', value: stats.value.overview.quote_funnel_starts },
+    { label: 'Package Selects', value: stats.value.overview.quote_funnel_package_selections },
+    { label: 'Quote Submissions', value: stats.value.overview.quote_funnel_submissions },
+    { label: 'Quote CVR', value: stats.value.overview.quote_funnel_conversion_rate, formatter: formatPercent },
+    { label: 'External Referrer Views', value: stats.value.overview.external_referrer_views },
+    { label: 'Unique Referrer Sources', value: stats.value.overview.unique_external_referrers },
 ]);
 
 function numberValue(value) {
@@ -66,6 +79,10 @@ function formatDuration(value) {
     }
 
     return `${seconds}s`;
+}
+
+function formatPercent(value) {
+    return `${numberValue(value).toFixed(1)}%`;
 }
 
 function formatCardValue(card) {
@@ -100,6 +117,12 @@ function normalizedPages() {
 
 const countryRows = computed(() => normalizedCountries());
 const pageRows = computed(() => normalizedPages());
+const externalReferrerRows = computed(() =>
+    (Array.isArray(stats.value.external_referrers) ? stats.value.external_referrers : []).map((item) => ({
+        referrer: item.referrer || 'unknown',
+        views: numberValue(item.views),
+    })),
+);
 
 const maxDailyViews = computed(() => {
     const rows = Array.isArray(stats.value.daily_views) ? stats.value.daily_views : [];
@@ -167,9 +190,16 @@ async function loadStats() {
                 total_time_seconds: numberValue(data?.overview?.total_time_seconds),
                 average_time_per_visitor_seconds: numberValue(data?.overview?.average_time_per_visitor_seconds),
                 quotes_with_tracking: numberValue(data?.overview?.quotes_with_tracking),
+                quote_funnel_starts: numberValue(data?.overview?.quote_funnel_starts),
+                quote_funnel_package_selections: numberValue(data?.overview?.quote_funnel_package_selections),
+                quote_funnel_submissions: numberValue(data?.overview?.quote_funnel_submissions),
+                quote_funnel_conversion_rate: numberValue(data?.overview?.quote_funnel_conversion_rate),
+                external_referrer_views: numberValue(data?.overview?.external_referrer_views),
+                unique_external_referrers: numberValue(data?.overview?.unique_external_referrers),
             },
             country_views: Array.isArray(data?.country_views) ? data.country_views : [],
             page_views: Array.isArray(data?.page_views) ? data.page_views : [],
+            external_referrers: Array.isArray(data?.external_referrers) ? data.external_referrers : [],
             daily_views: Array.isArray(data?.daily_views) ? data.daily_views : [],
             quote_tracking: Array.isArray(data?.quote_tracking) ? data.quote_tracking : [],
         };
@@ -191,7 +221,7 @@ onMounted(() => {
     <main class="mx-auto mt-10 max-w-6xl px-4 pb-10 font-quicksand">
         <section class="rounded-3xl border border-slate-200/90 bg-slate-50/90 p-5 shadow-2xl backdrop-blur-md md:p-6">
             <h1 class="mb-2 text-center text-5xl text-slate-900 drop-shadow-sm font-dancing">Tracking Stats</h1>
-            <p class="mb-8 text-center text-slate-600">Anonymous page views by page and country.</p>
+            <p class="mb-8 text-center text-slate-600">Anonymous page views by page, country, and external referrer source.</p>
 
             <AdminMenu />
 
@@ -243,6 +273,24 @@ onMounted(() => {
                         </li>
                     </ul>
                 </section>
+            </section>
+
+            <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-md">
+                <h2 class="mb-3 text-2xl font-dancing text-sky-900">Top External Referrers</h2>
+                <p class="mb-3 text-sm text-slate-600">Only external domains are stored. Internal site referrers are ignored.</p>
+
+                <p v-if="externalReferrerRows.length === 0" class="text-sm text-slate-600">No external referrer data yet.</p>
+
+                <ul v-else class="space-y-2">
+                    <li
+                        v-for="item in externalReferrerRows"
+                        :key="`referrer-${item.referrer}`"
+                        class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+                    >
+                        <span class="font-semibold text-slate-700 break-all">{{ item.referrer }}</span>
+                        <span class="shrink-0 text-slate-600">{{ formatNumber(item.views) }}</span>
+                    </li>
+                </ul>
             </section>
 
             <section class="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-md">

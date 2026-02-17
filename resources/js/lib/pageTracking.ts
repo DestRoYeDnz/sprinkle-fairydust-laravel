@@ -23,6 +23,13 @@ interface TrackingPayload {
     duration_seconds: number | null;
 }
 
+interface CustomTrackingOptions {
+    path?: string;
+    referrer?: string | null;
+    eventType?: TrackingEventType;
+    durationSeconds?: number | null;
+}
+
 function safeLocalStorageGet(key: string): string | null {
     try {
         return window.localStorage.getItem(key);
@@ -137,7 +144,12 @@ function derivePageKey(path: string): string {
     const knownPages: Record<string, string> = {
         '/': 'home',
         '/about': 'about',
+        '/faq': 'faq',
+        '/terms-and-conditions': 'terms',
         '/services': 'services',
+        '/face-painting': 'face_painting',
+        '/glitter-tattoos': 'glitter_tattoos',
+        '/festival-face-painting': 'festival_face_painting',
         '/events': 'events',
         '/gallery': 'gallery',
         '/designs': 'designs',
@@ -202,6 +214,32 @@ function sendTrackingPayload(payload: TrackingPayload, preferBeacon = false): vo
         keepalive: true,
     }).catch(() => {
         // Ignore tracking failures.
+    });
+}
+
+export function trackCustomTrackingEvent(pageKey: string, options: CustomTrackingOptions = {}): void {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
+    const normalizedPath = normalizePath(options.path ?? window.location.pathname);
+
+    if (isAdminPath(normalizedPath)) {
+        return;
+    }
+
+    const eventType = options.eventType ?? 'engagement';
+    const durationSeconds = eventType === 'engagement'
+        ? Math.max(0, Math.round(Number(options.durationSeconds ?? 0)))
+        : null;
+
+    sendTrackingPayload({
+        anonymous_id: getOrCreateAnonymousId(),
+        page_key: pageKey.trim().slice(0, 80) || 'unknown',
+        path: normalizedPath,
+        referrer: options.referrer ?? document.referrer ?? null,
+        event_type: eventType,
+        duration_seconds: durationSeconds,
     });
 }
 

@@ -18,6 +18,16 @@ class Quote extends Model
     protected $fillable = [
         'name',
         'email',
+        'phone',
+        'guest_count',
+        'package_name',
+        'services_requested',
+        'travel_area',
+        'venue_type',
+        'heard_about',
+        'notes',
+        'terms_accepted',
+        'terms_accepted_at',
         'anonymous_id',
         'event_type',
         'event_date',
@@ -47,6 +57,10 @@ class Quote extends Model
      * @var array<string, string>
      */
     protected $casts = [
+        'guest_count' => 'integer',
+        'services_requested' => 'array',
+        'terms_accepted' => 'boolean',
+        'terms_accepted_at' => 'datetime',
         'event_date' => 'date',
         'total_hours' => 'float',
         'calc_base_amount' => 'float',

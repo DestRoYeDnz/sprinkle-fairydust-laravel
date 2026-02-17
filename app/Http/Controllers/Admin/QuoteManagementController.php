@@ -25,6 +25,16 @@ class QuoteManagementController extends Controller
                 'id',
                 'name',
                 'email',
+                'phone',
+                'guest_count',
+                'package_name',
+                'services_requested',
+                'travel_area',
+                'venue_type',
+                'heard_about',
+                'notes',
+                'terms_accepted',
+                'terms_accepted_at',
                 'anonymous_id',
                 'event_type',
                 'event_date',
@@ -173,6 +183,9 @@ class QuoteManagementController extends Controller
             $quote->forceFill([
                 'client_confirmed_at' => now(),
             ])->save();
+
+            $this->sendQuoteConfirmedNotification($quote);
+            $this->sendClientQuoteConfirmedEmail($quote);
         }
 
         $eventType = $quote->event_type ?: 'your event';
@@ -212,6 +225,155 @@ class QuoteManagementController extends Controller
     }
 
     /**
+     * Send an admin notification when a client confirms a quote.
+     */
+    private function sendQuoteConfirmedNotification(Quote $quote): void
+    {
+        $toEmail = config('services.sprinkle.quote_confirmed_notification_email')
+            ?: config('services.sprinkle.quote_notification_email')
+            ?: 'brettj@dekode.co.nz';
+
+        if (! is_string($toEmail) || trim($toEmail) === '') {
+            return;
+        }
+
+        $eventType = $quote->event_type ?: 'Event';
+        $eventDate = $quote->event_date?->format('Y-m-d') ?: 'TBC';
+        $startTime = $quote->start_time ?: 'TBC';
+        $endTime = $quote->end_time ?: 'TBC';
+        $adminQuoteUrl = rtrim((string) config('app.url', ''), '/').'/admin/quotes';
+
+        try {
+            Mail::to($toEmail, 'Sprinkle Fairydust Admin')->send(new StyledHtmlMail(
+                sprintf('Quote Confirmed: %s (%s)', $quote->name ?: 'Client', $eventType),
+                sprintf(
+                    '<h2>Quote Confirmed ✅</h2>'.
+                        '<p><strong>Name:</strong> %s</p>'.
+                        '<p><strong>Email:</strong> %s</p>'.
+                        '<p><strong>Phone:</strong> %s</p>'.
+                        '<p><strong>Event Type:</strong> %s</p>'.
+                        '<p><strong>Event Date:</strong> %s</p>'.
+                        '<p><strong>Start Time:</strong> %s</p>'.
+                        '<p><strong>End Time:</strong> %s</p>'.
+                        '<p><strong>Total Hours:</strong> %s</p>'.
+                        '<p><strong>Guest Count:</strong> %s</p>'.
+                        '<p><strong>Package:</strong> %s</p>'.
+                        '<p><strong>Travel Area:</strong> %s</p>'.
+                        '<p><strong>Venue Type:</strong> %s</p>'.
+                        '<p><strong>Confirmed At:</strong> %s</p>'.
+                        '<hr><p><a href="%s">Open Admin Quotes</a></p>',
+                    e($quote->name ?: '—'),
+                    e($quote->email ?: '—'),
+                    e($quote->phone ?: '—'),
+                    e($eventType),
+                    e($eventDate),
+                    e($startTime),
+                    e($endTime),
+                    e($quote->total_hours !== null ? (string) $quote->total_hours : '—'),
+                    e($quote->guest_count !== null ? (string) $quote->guest_count : '—'),
+                    e($quote->package_name ?: '—'),
+                    e($quote->travel_area ?: '—'),
+                    e($this->formatVenueType($quote->venue_type)),
+                    e(optional($quote->client_confirmed_at)->format('Y-m-d H:i:s') ?: now()->format('Y-m-d H:i:s')),
+                    e($adminQuoteUrl),
+                ),
+                implode("\n", [
+                    'Quote Confirmed',
+                    '================',
+                    'Name: '.($quote->name ?: '—'),
+                    'Email: '.($quote->email ?: '—'),
+                    'Phone: '.($quote->phone ?: '—'),
+                    'Event Type: '.$eventType,
+                    'Event Date: '.$eventDate,
+                    'Start Time: '.$startTime,
+                    'End Time: '.$endTime,
+                    'Total Hours: '.($quote->total_hours !== null ? (string) $quote->total_hours : '—'),
+                    'Guest Count: '.($quote->guest_count !== null ? (string) $quote->guest_count : '—'),
+                    'Package: '.($quote->package_name ?: '—'),
+                    'Travel Area: '.($quote->travel_area ?: '—'),
+                    'Venue Type: '.$this->formatVenueType($quote->venue_type),
+                    'Confirmed At: '.(optional($quote->client_confirmed_at)->format('Y-m-d H:i:s') ?: now()->format('Y-m-d H:i:s')),
+                    '',
+                    'Admin Quotes: '.$adminQuoteUrl,
+                ]),
+            ));
+        } catch (\Throwable) {
+            // Do not fail quote confirmation if admin notification cannot be sent.
+        }
+    }
+
+    /**
+     * Send a confirmation receipt to the customer who confirmed the quote.
+     */
+    private function sendClientQuoteConfirmedEmail(Quote $quote): void
+    {
+        if (! $quote->email) {
+            return;
+        }
+
+        $eventType = $quote->event_type ?: 'your event';
+        $eventDate = $quote->event_date?->format('l, j F Y') ?: 'To be confirmed';
+        $startTime = $this->formatTime($quote->start_time);
+        $endTime = $this->formatTime($quote->end_time);
+        $totalAmount = $this->formatCurrency($quote->calc_total_amount);
+        $contactEmail = (string) config('mail.from.address', '');
+        $contactLineHtml = $contactEmail !== ''
+            ? '<p>Questions? Reply to this email or contact us at '.e($contactEmail).'.</p>'
+            : '';
+
+        try {
+            Mail::to($quote->email, $quote->name ?: 'Valued Client')->send(new StyledHtmlMail(
+                sprintf('Your Quote is Confirmed%s', $quote->event_type ? ' - '.$quote->event_type : ''),
+                sprintf(
+                    '<h2>Quote Confirmed ✅</h2>'.
+                        '<p>Hi %s,</p>'.
+                        '<p>Thanks for confirming your quote with Sprinkle Fairydust. Your booking is now marked as confirmed.</p>'.
+                        '<p><strong>Event:</strong> %s</p>'.
+                        '<p><strong>Date:</strong> %s</p>'.
+                        '<p><strong>Start:</strong> %s</p>'.
+                        '<p><strong>End:</strong> %s</p>'.
+                        '<p><strong>Total:</strong> %s</p>'.
+                        '<p><strong>Location:</strong> %s</p>'.
+                        '<p><strong>Confirmed At:</strong> %s</p>'.
+                        '<p>We are excited to bring the sparkle to your event.</p>'.
+                        '%s',
+                    e($quote->name ?: 'there'),
+                    e($eventType),
+                    e($eventDate),
+                    e($startTime),
+                    e($endTime),
+                    e($totalAmount),
+                    e($quote->address ?: 'To be confirmed'),
+                    e(optional($quote->client_confirmed_at)->format('Y-m-d H:i:s') ?: now()->format('Y-m-d H:i:s')),
+                    $contactLineHtml,
+                ),
+                implode("\n", array_filter([
+                    'Quote Confirmed',
+                    '===============',
+                    '',
+                    'Hi '.($quote->name ?: 'there').',',
+                    '',
+                    'Thanks for confirming your quote with Sprinkle Fairydust.',
+                    'Your booking is now marked as confirmed.',
+                    '',
+                    'Event: '.$eventType,
+                    'Date: '.$eventDate,
+                    'Start: '.$startTime,
+                    'End: '.$endTime,
+                    'Total: '.$totalAmount,
+                    'Location: '.($quote->address ?: 'To be confirmed'),
+                    'Confirmed At: '.(optional($quote->client_confirmed_at)->format('Y-m-d H:i:s') ?: now()->format('Y-m-d H:i:s')),
+                    '',
+                    'We are excited to bring the sparkle to your event.',
+                    $contactEmail !== '' ? 'Questions? Contact us at: '.$contactEmail : null,
+                ])),
+            ));
+        } catch (\Throwable) {
+            // Do not fail confirmation flow if customer receipt email cannot be sent.
+        }
+    }
+
+    /**
      * Track quote email opens from a secure signed tracking pixel.
      */
     public function trackEmailOpen(Quote $quote): \Illuminate\Http\Response
@@ -243,6 +405,16 @@ class QuoteManagementController extends Controller
         return $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:48'],
+            'guest_count' => ['nullable', 'integer', 'min:1', 'max:500'],
+            'package_name' => ['nullable', 'string', 'max:120'],
+            'services_requested' => ['nullable', 'array', 'max:8'],
+            'services_requested.*' => ['string', 'max:80'],
+            'travel_area' => ['nullable', 'string', 'max:255'],
+            'venue_type' => ['nullable', Rule::in(['indoor', 'outdoor', 'mixed', 'unsure'])],
+            'heard_about' => ['nullable', 'string', 'max:120'],
+            'notes' => ['nullable', 'string', 'max:4000'],
+            'terms_accepted' => ['nullable', 'boolean'],
             'anonymous_id' => ['nullable', 'string', 'max:80'],
             'event_type' => ['nullable', 'string', 'max:255'],
             'event_date' => ['nullable', 'date'],
@@ -271,6 +443,16 @@ class QuoteManagementController extends Controller
         $payload = [
             'name' => $validated['name'],
             'email' => $validated['email'],
+            'phone' => $this->sanitizePhone($validated['phone'] ?? null),
+            'guest_count' => $this->nullableInt($validated, 'guest_count'),
+            'package_name' => $this->nullableTrimmedString($validated, 'package_name', 120),
+            'services_requested' => $this->normalizedServiceList($validated['services_requested'] ?? null),
+            'travel_area' => $this->nullableTrimmedString($validated, 'travel_area'),
+            'venue_type' => $this->nullableTrimmedString($validated, 'venue_type', 32),
+            'heard_about' => $this->nullableTrimmedString($validated, 'heard_about', 120),
+            'notes' => $this->nullableTrimmedString($validated, 'notes', 4000),
+            'terms_accepted' => (bool) ($validated['terms_accepted'] ?? false),
+            'terms_accepted_at' => ($validated['terms_accepted'] ?? false) ? now() : null,
             'event_type' => $validated['event_type'] ?? null,
             'event_date' => $validated['event_date'] ?? null,
             'address' => $validated['address'] ?? null,
@@ -331,6 +513,66 @@ class QuoteManagementController extends Controller
         return (float) $validated[$key];
     }
 
+    private function nullableInt(array $validated, string $key): ?int
+    {
+        if (! array_key_exists($key, $validated) || $validated[$key] === null || $validated[$key] === '') {
+            return null;
+        }
+
+        return (int) $validated[$key];
+    }
+
+    private function nullableTrimmedString(array $validated, string $key, int $maxLength = 255): ?string
+    {
+        if (! array_key_exists($key, $validated) || $validated[$key] === null) {
+            return null;
+        }
+
+        $value = trim((string) $validated[$key]);
+
+        if ($value === '') {
+            return null;
+        }
+
+        return mb_substr($value, 0, $maxLength);
+    }
+
+    private function sanitizePhone(?string $phone): ?string
+    {
+        if ($phone === null) {
+            return null;
+        }
+
+        $sanitized = preg_replace('/[^0-9+\-\s().]/', '', trim($phone)) ?? '';
+
+        if ($sanitized === '') {
+            return null;
+        }
+
+        return substr($sanitized, 0, 48);
+    }
+
+    /**
+     * @param  array<int, string>|null  $services
+     * @return array<int, string>|null
+     */
+    private function normalizedServiceList(?array $services): ?array
+    {
+        if (! is_array($services) || $services === []) {
+            return null;
+        }
+
+        $normalized = collect($services)
+            ->map(fn (mixed $value): string => trim((string) $value))
+            ->filter(fn (string $value): bool => $value !== '')
+            ->map(fn (string $value): string => mb_substr($value, 0, 80))
+            ->unique()
+            ->values()
+            ->all();
+
+        return $normalized === [] ? null : $normalized;
+    }
+
     private function sanitizeAnonymousId(?string $anonymousId): ?string
     {
         if ($anonymousId === null) {
@@ -358,8 +600,19 @@ class QuoteManagementController extends Controller
         $startTime = $this->formatTime($quote->start_time);
         $endTime = $this->formatTime($quote->end_time);
         $hours = $quote->total_hours !== null ? number_format($quote->total_hours, 2).' hours' : 'To be confirmed';
+        $phone = $quote->phone ?: 'To be confirmed';
+        $guestCount = $quote->guest_count !== null ? (string) $quote->guest_count : 'To be confirmed';
+        $packageName = $quote->package_name ?: 'To be confirmed';
+        $servicesRequested = $this->formatServices($quote->services_requested);
+        $travelArea = $quote->travel_area ?: 'To be confirmed';
+        $venueType = $this->formatVenueType($quote->venue_type);
+        $heardAbout = $quote->heard_about ?: 'To be confirmed';
+        $notes = $quote->notes ? nl2br(e($quote->notes)) : '—';
+        $termsAccepted = $quote->terms_accepted ? 'Yes' : 'No';
+        $termsAcceptedAt = $quote->terms_accepted_at?->format('Y-m-d H:i') ?: '—';
         $confirmUrl = $actionUrls['confirm'] ?? null;
         $openTrackingUrl = $actionUrls['open'] ?? null;
+        $termsUrl = rtrim((string) config('app.url', ''), '/').'/terms-and-conditions';
 
         $calculationRows = implode('', array_filter([
             $this->quoteEmailRow('Payment Type', $this->paymentTypeLabel($quote->calc_payment_type)),
@@ -392,8 +645,17 @@ class QuoteManagementController extends Controller
             .'<tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#475569;">Date</td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;text-align:right;color:#0f172a;font-weight:700;">'.e($eventDate).'</td></tr>'
             .'<tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#475569;">Start Time</td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;text-align:right;color:#0f172a;font-weight:700;">'.e($startTime).'</td></tr>'
             .'<tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#475569;">End Time</td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;text-align:right;color:#0f172a;font-weight:700;">'.e($endTime).'</td></tr>'
-            .'<tr><td style="padding:8px 0;color:#475569;">Duration</td><td style="padding:8px 0;text-align:right;color:#0f172a;font-weight:700;">'.e($hours).'</td></tr>'
-            .($quote->address ? '<tr><td style="padding:8px 0;border-top:1px solid #e2e8f0;color:#475569;">Location</td><td style="padding:8px 0;border-top:1px solid #e2e8f0;text-align:right;color:#0f172a;font-weight:700;">'.e($quote->address).'</td></tr>' : '')
+            .'<tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#475569;">Duration</td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;text-align:right;color:#0f172a;font-weight:700;">'.e($hours).'</td></tr>'
+            .'<tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#475569;">Phone</td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;text-align:right;color:#0f172a;font-weight:700;">'.e($phone).'</td></tr>'
+            .'<tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#475569;">Guest Count</td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;text-align:right;color:#0f172a;font-weight:700;">'.e($guestCount).'</td></tr>'
+            .'<tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#475569;">Package</td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;text-align:right;color:#0f172a;font-weight:700;">'.e($packageName).'</td></tr>'
+            .'<tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#475569;">Services</td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;text-align:right;color:#0f172a;font-weight:700;">'.e($servicesRequested).'</td></tr>'
+            .'<tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#475569;">Travel Area</td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;text-align:right;color:#0f172a;font-weight:700;">'.e($travelArea).'</td></tr>'
+            .'<tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#475569;">Venue Type</td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;text-align:right;color:#0f172a;font-weight:700;">'.e($venueType).'</td></tr>'
+            .'<tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#475569;">Heard About Us</td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;text-align:right;color:#0f172a;font-weight:700;">'.e($heardAbout).'</td></tr>'
+            .'<tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#475569;">Location</td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;text-align:right;color:#0f172a;font-weight:700;">'.e($quote->address ?: 'To be confirmed').'</td></tr>'
+            .'<tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#475569;">Terms Accepted</td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;text-align:right;color:#0f172a;font-weight:700;">'.e($termsAccepted).' ('.e($termsAcceptedAt).')</td></tr>'
+            .'<tr><td style="padding:8px 0;color:#475569;vertical-align:top;">Notes</td><td style="padding:8px 0;text-align:right;color:#0f172a;font-weight:700;">'.$notes.'</td></tr>'
             .'</table></div>'
             .'<div style="border:1px solid #99f6e4;border-radius:16px;padding:15px 16px;background:linear-gradient(180deg,#f8fffe 0%,#f0fdfa 100%);">'
             .'<p style="margin:0 0 10px 0;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#0f766e;font-weight:700;">Quote Breakdown</p>'
@@ -405,6 +667,7 @@ class QuoteManagementController extends Controller
             .'<div style="margin-top:16px;border-radius:14px;padding:14px 16px;background:#eff6ff;border:1px dashed #7dd3fc;">'
             .'<p style="margin:0;font-size:13px;line-height:1.7;color:#1e3a8a;">Ready to book? Confirm your quote below and we will lock in your date.</p>'
             .'</div>'
+            .'<p style="margin:12px 0 0 0;font-size:12px;line-height:1.6;color:#475569;">By confirming this quote, you agree to our <a href="'.e($termsUrl).'" style="color:#0f766e;">Terms and Conditions</a>.</p>'
             .($confirmUrl
                 ? '<p style="margin:14px 0 0 0;"><a href="'.e($confirmUrl).'" style="display:inline-block;background:linear-gradient(135deg,#0ea5e9,#14b8a6);color:#ecfeff;text-decoration:none;font-weight:700;padding:11px 16px;border-radius:999px;">Confirm Your Quote</a></p>'
                 : '')
@@ -427,8 +690,19 @@ class QuoteManagementController extends Controller
         $startTime = $this->formatTime($quote->start_time);
         $endTime = $this->formatTime($quote->end_time);
         $hours = $quote->total_hours !== null ? number_format($quote->total_hours, 2).' hours' : 'To be confirmed';
+        $phone = $quote->phone ?: 'To be confirmed';
+        $guestCount = $quote->guest_count !== null ? (string) $quote->guest_count : 'To be confirmed';
+        $packageName = $quote->package_name ?: 'To be confirmed';
+        $servicesRequested = $this->formatServices($quote->services_requested);
+        $travelArea = $quote->travel_area ?: 'To be confirmed';
+        $venueType = $this->formatVenueType($quote->venue_type);
+        $heardAbout = $quote->heard_about ?: 'To be confirmed';
+        $notes = $quote->notes ?: '—';
+        $termsAccepted = $quote->terms_accepted ? 'Yes' : 'No';
+        $termsAcceptedAt = $quote->terms_accepted_at?->format('Y-m-d H:i') ?: '—';
         $contactEmail = (string) config('mail.from.address', '');
         $confirmUrl = $actionUrls['confirm'] ?? '';
+        $termsUrl = rtrim((string) config('app.url', ''), '/').'/terms-and-conditions';
 
         $lines = [
             'Sprinkle Fairydust Quote',
@@ -446,7 +720,16 @@ class QuoteManagementController extends Controller
             'Start: '.$startTime,
             'End: '.$endTime,
             'Duration: '.$hours,
+            'Phone: '.$phone,
+            'Guest Count: '.$guestCount,
+            'Package: '.$packageName,
+            'Services: '.$servicesRequested,
+            'Travel Area: '.$travelArea,
+            'Venue Type: '.$venueType,
+            'Heard About Us: '.$heardAbout,
             'Location: '.($quote->address ?: 'To be confirmed'),
+            'Terms Accepted: '.$termsAccepted.' ('.$termsAcceptedAt.')',
+            'Notes: '.$notes,
             '',
             'Quote Breakdown',
             '---------------',
@@ -464,6 +747,8 @@ class QuoteManagementController extends Controller
         if ($confirmUrl !== '') {
             $lines[] = 'Confirm your quote: '.$confirmUrl;
         }
+
+        $lines[] = 'Terms and Conditions: '.$termsUrl;
 
         if ($contactEmail !== '') {
             $lines[] = 'Questions? Contact us at: '.$contactEmail;
@@ -497,6 +782,33 @@ class QuoteManagementController extends Controller
             .'<td style="padding:7px 0;border-bottom:1px solid #e2e8f0;color:#475569;">'.e($label).'</td>'
             .'<td style="padding:7px 0;border-bottom:1px solid #e2e8f0;text-align:right;color:#0f172a;">'.$value.'</td>'
             .'</tr>';
+    }
+
+    /**
+     * @param  array<int, string>|null  $services
+     */
+    private function formatServices(?array $services): string
+    {
+        if (! is_array($services) || $services === []) {
+            return 'To be confirmed';
+        }
+
+        return implode(', ', $services);
+    }
+
+    private function formatVenueType(?string $venueType): string
+    {
+        if (! $venueType) {
+            return 'To be confirmed';
+        }
+
+        return match ($venueType) {
+            'indoor' => 'Indoor',
+            'outdoor' => 'Outdoor',
+            'mixed' => 'Indoor + Outdoor',
+            'unsure' => 'Not sure yet',
+            default => ucfirst($venueType),
+        };
     }
 
     private function paymentTypeLabel(?string $paymentType): string

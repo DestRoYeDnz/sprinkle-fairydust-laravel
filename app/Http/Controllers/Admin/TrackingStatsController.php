@@ -46,6 +46,23 @@ class TrackingStatsController extends Controller
             ->limit(20)
             ->get();
 
+        $externalReferrersQuery = (clone $viewEvents)
+            ->whereNotNull('referrer')
+            ->where('referrer', '!=', '');
+
+        $externalReferrerViews = (clone $externalReferrersQuery)->count();
+
+        $uniqueExternalReferrers = (clone $externalReferrersQuery)
+            ->distinct('referrer')
+            ->count('referrer');
+
+        $externalReferrers = (clone $externalReferrersQuery)
+            ->selectRaw('referrer, COUNT(*) as views')
+            ->groupBy('referrer')
+            ->orderByDesc('views')
+            ->limit(20)
+            ->get();
+
         $viewsLast24Hours = (clone $viewEvents)
             ->where('viewed_at', '>=', now()->subDay())
             ->count();
@@ -57,6 +74,25 @@ class TrackingStatsController extends Controller
         $viewsLast30Days = (clone $viewEvents)
             ->where('viewed_at', '>=', now()->subDays(30))
             ->count();
+
+        $quoteFunnelStarts = PageView::query()
+            ->where('event_type', 'engagement')
+            ->where('page_key', 'quote_funnel_start')
+            ->count();
+
+        $quoteFunnelPackageSelections = PageView::query()
+            ->where('event_type', 'engagement')
+            ->where('page_key', 'quote_funnel_package_selected')
+            ->count();
+
+        $quoteFunnelSubmissions = PageView::query()
+            ->where('event_type', 'engagement')
+            ->where('page_key', 'quote_funnel_submitted')
+            ->count();
+
+        $quoteFunnelConversionRate = $quoteFunnelStarts > 0
+            ? round(($quoteFunnelSubmissions / $quoteFunnelStarts) * 100, 1)
+            : 0.0;
 
         $dailyViews = (clone $viewEvents)
             ->selectRaw('DATE(viewed_at) as viewed_date, COUNT(*) as views')
@@ -127,9 +163,16 @@ class TrackingStatsController extends Controller
                 'total_time_seconds' => $totalTimeSeconds,
                 'average_time_per_visitor_seconds' => $averageTimePerVisitorSeconds,
                 'quotes_with_tracking' => $quotesWithTracking,
+                'quote_funnel_starts' => $quoteFunnelStarts,
+                'quote_funnel_package_selections' => $quoteFunnelPackageSelections,
+                'quote_funnel_submissions' => $quoteFunnelSubmissions,
+                'quote_funnel_conversion_rate' => $quoteFunnelConversionRate,
+                'external_referrer_views' => $externalReferrerViews,
+                'unique_external_referrers' => $uniqueExternalReferrers,
             ],
             'country_views' => $countryViews,
             'page_views' => $pageViews,
+            'external_referrers' => $externalReferrers,
             'daily_views' => $dailyViews,
             'quote_tracking' => $quoteTracking,
         ]);

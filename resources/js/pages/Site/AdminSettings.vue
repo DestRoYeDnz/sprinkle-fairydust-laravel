@@ -31,10 +31,20 @@ function defaultSettings() {
         form: {
             organizerName: '',
             organizerEmail: '',
+            organizerPhone: '',
             eventName: '',
             eventDate: '',
             startTime: '',
             endTime: '',
+            guestCount: 0,
+            packageName: '',
+            servicesRequested: '',
+            travelArea: '',
+            venueType: '',
+            heardAbout: '',
+            eventAddress: '',
+            notes: '',
+            termsAccepted: false,
             paymentType: 'hourly',
             rate: 120,
             hours: 8,
@@ -78,10 +88,20 @@ function normalizeSettings(source) {
         form: {
             organizerName: String(payloadForm.organizerName ?? defaults.form.organizerName),
             organizerEmail: String(payloadForm.organizerEmail ?? defaults.form.organizerEmail),
+            organizerPhone: String(payloadForm.organizerPhone ?? defaults.form.organizerPhone),
             eventName: String(payloadForm.eventName ?? defaults.form.eventName),
             eventDate: String(payloadForm.eventDate ?? defaults.form.eventDate),
             startTime: String(payloadForm.startTime ?? defaults.form.startTime),
             endTime: String(payloadForm.endTime ?? defaults.form.endTime),
+            guestCount: toNumber(payloadForm.guestCount, defaults.form.guestCount),
+            packageName: String(payloadForm.packageName ?? defaults.form.packageName),
+            servicesRequested: String(payloadForm.servicesRequested ?? defaults.form.servicesRequested),
+            travelArea: String(payloadForm.travelArea ?? defaults.form.travelArea),
+            venueType: String(payloadForm.venueType ?? defaults.form.venueType),
+            heardAbout: String(payloadForm.heardAbout ?? defaults.form.heardAbout),
+            eventAddress: String(payloadForm.eventAddress ?? defaults.form.eventAddress),
+            notes: String(payloadForm.notes ?? defaults.form.notes),
+            termsAccepted: Boolean(payloadForm.termsAccepted ?? defaults.form.termsAccepted),
             paymentType: ['hourly', 'perface'].includes(String(payloadForm.paymentType))
                 ? String(payloadForm.paymentType)
                 : defaults.form.paymentType,
@@ -238,6 +258,14 @@ onMounted(() => {
                             <input v-model="form.form.organizerEmail" type="text" class="input" />
                         </label>
                         <label class="field-label">
+                            Organizer Phone
+                            <input v-model="form.form.organizerPhone" type="text" class="input" />
+                        </label>
+                        <label class="field-label">
+                            Guest Count
+                            <input v-model.number="form.form.guestCount" type="number" min="0" class="input" />
+                        </label>
+                        <label class="field-label">
                             Event Name
                             <input v-model="form.form.eventName" type="text" class="input" />
                         </label>
@@ -253,7 +281,47 @@ onMounted(() => {
                             End Time
                             <input v-model="form.form.endTime" type="time" class="input" />
                         </label>
+                        <label class="field-label">
+                            Package
+                            <input v-model="form.form.packageName" type="text" class="input" />
+                        </label>
+                        <label class="field-label">
+                            Services Requested
+                            <input v-model="form.form.servicesRequested" type="text" class="input" />
+                        </label>
+                        <label class="field-label">
+                            Travel Area
+                            <input v-model="form.form.travelArea" type="text" class="input" />
+                        </label>
+                        <label class="field-label">
+                            Venue Type
+                            <select v-model="form.form.venueType" class="input">
+                                <option value="">Select venue</option>
+                                <option value="indoor">Indoor</option>
+                                <option value="outdoor">Outdoor</option>
+                                <option value="mixed">Indoor + Outdoor</option>
+                                <option value="unsure">Not sure yet</option>
+                            </select>
+                        </label>
+                        <label class="field-label">
+                            Heard About
+                            <input v-model="form.form.heardAbout" type="text" class="input" />
+                        </label>
+                        <label class="field-label">
+                            Event Address
+                            <input v-model="form.form.eventAddress" type="text" class="input" />
+                        </label>
                     </div>
+
+                    <label class="field-label mt-4">
+                        Notes
+                        <textarea v-model="form.form.notes" class="input mt-2 h-24 resize-y"></textarea>
+                    </label>
+
+                    <label class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
+                        <input v-model="form.form.termsAccepted" type="checkbox" class="h-4 w-4 rounded border-slate-400" />
+                        Terms accepted by default
+                    </label>
                 </section>
 
                 <section class="panel">
@@ -455,4 +523,3 @@ onMounted(() => {
     border-color: #94a3b8;
 }
 </style>
-

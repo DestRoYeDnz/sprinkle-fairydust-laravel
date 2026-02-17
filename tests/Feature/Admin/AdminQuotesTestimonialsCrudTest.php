@@ -16,6 +16,15 @@ it('allows admin users to manage quotes', function () {
         ->postJson(route('admin.quotes.store'), [
             'name' => 'Jamie Smith',
             'email' => 'jamie@example.com',
+            'phone' => '021 999 1111',
+            'guest_count' => 30,
+            'package_name' => 'Classic Birthday Magic',
+            'services_requested' => ['Face Painting', 'Glitter Tattoos'],
+            'travel_area' => 'Papakura',
+            'venue_type' => 'outdoor',
+            'heard_about' => 'Facebook',
+            'notes' => 'Need quick queue designs',
+            'terms_accepted' => true,
             'anonymous_id' => 'anon_admin_quote_1',
             'event_type' => 'Birthday',
             'event_date' => now()->toDateString(),
@@ -39,6 +48,9 @@ it('allows admin users to manage quotes', function () {
         'id' => $quoteId,
         'name' => 'Jamie Smith',
         'email' => 'jamie@example.com',
+        'phone' => '021 999 1111',
+        'guest_count' => 30,
+        'package_name' => 'Classic Birthday Magic',
         'anonymous_id' => 'anon_admin_quote_1',
     ]);
 
@@ -51,6 +63,15 @@ it('allows admin users to manage quotes', function () {
         ->putJson(route('admin.quotes.update', ['quote' => $quoteId]), [
             'name' => 'Jamie Smith',
             'email' => 'jamie@example.com',
+            'phone' => '021 222 3333',
+            'guest_count' => 35,
+            'package_name' => 'Festival Crowd Package',
+            'services_requested' => ['Face Painting'],
+            'travel_area' => 'Drury',
+            'venue_type' => 'mixed',
+            'heard_about' => 'Referral',
+            'notes' => 'Updated quote notes',
+            'terms_accepted' => true,
             'event_type' => 'Festival',
             'event_date' => now()->toDateString(),
             'start_time' => '11:00',
@@ -71,6 +92,9 @@ it('allows admin users to manage quotes', function () {
     $this->assertDatabaseHas('quotes', [
         'id' => $quoteId,
         'event_type' => 'Festival',
+        'phone' => '021 222 3333',
+        'guest_count' => 35,
+        'package_name' => 'Festival Crowd Package',
         'address' => '88 Updated Avenue',
         'calc_payment_type' => 'perface',
         'calc_total_amount' => 621,
@@ -93,7 +117,9 @@ it('allows admin users to manage quotes', function () {
         return $mail->hasTo('jamie@example.com')
             && $mail->hasBcc('admin@sprinkle.test')
             && str_contains($mail->mailSubject, 'Sprinkle Fairydust Quote')
-            && str_contains($mail->htmlContent, 'Sprinkle Fairydust Quote');
+            && str_contains($mail->htmlContent, 'Sprinkle Fairydust Quote')
+            && str_contains($mail->htmlContent, 'Guest Count')
+            && str_contains($mail->htmlContent, 'Package');
     });
 
     $this->assertDatabaseHas('quotes', [
@@ -155,9 +181,16 @@ it('forbids non-admin users from managing quotes', function () {
 });
 
 it('confirms quote via signed email webhook link', function () {
+    Mail::fake();
+
+    config([
+        'services.sprinkle.quote_confirmed_notification_email' => 'confirmations@sprinkle.test',
+    ]);
+
     $quote = Quote::query()->create([
         'name' => 'Signed Client',
         'email' => 'signed-client@example.com',
+        'event_type' => 'Birthday Party',
     ]);
 
     $url = URL::temporarySignedRoute('quotes.confirm', now()->addMinutes(30), [
@@ -170,6 +203,21 @@ it('confirms quote via signed email webhook link', function () {
 
     $quote->refresh();
     expect($quote->client_confirmed_at)->not->toBeNull();
+
+    Mail::assertSent(StyledHtmlMail::class, function (StyledHtmlMail $mail): bool {
+        return $mail->hasTo('confirmations@sprinkle.test')
+            && str_contains($mail->mailSubject, 'Quote Confirmed')
+            && str_contains($mail->htmlContent, 'Signed Client');
+    });
+
+    Mail::assertSent(StyledHtmlMail::class, function (StyledHtmlMail $mail): bool {
+        return $mail->hasTo('signed-client@example.com')
+            && str_contains($mail->mailSubject, 'Your Quote is Confirmed')
+            && str_contains($mail->htmlContent, 'Thanks for confirming your quote');
+    });
+
+    $this->get($url)->assertOk();
+    Mail::assertSentTimes(StyledHtmlMail::class, 2);
 });
 
 it('tracks quote email opens via signed pixel webhook link', function () {

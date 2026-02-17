@@ -25,10 +25,20 @@ function defaultCalculatorSettings() {
         form: {
             organizerName: '',
             organizerEmail: '',
+            organizerPhone: '',
             eventName: '',
             eventDate: '',
             startTime: '',
             endTime: '',
+            guestCount: 0,
+            packageName: '',
+            servicesRequested: '',
+            travelArea: '',
+            venueType: '',
+            heardAbout: '',
+            eventAddress: '',
+            notes: '',
+            termsAccepted: false,
             paymentType: 'hourly',
             rate: 120,
             hours: 8,
@@ -104,10 +114,20 @@ function normalizeCalculatorSettings(source) {
         form: {
             organizerName: String(payloadForm.organizerName ?? defaults.form.organizerName),
             organizerEmail: String(payloadForm.organizerEmail ?? defaults.form.organizerEmail),
+            organizerPhone: String(payloadForm.organizerPhone ?? defaults.form.organizerPhone),
             eventName: String(payloadForm.eventName ?? defaults.form.eventName),
             eventDate: String(payloadForm.eventDate ?? defaults.form.eventDate),
             startTime: String(payloadForm.startTime ?? defaults.form.startTime),
             endTime: String(payloadForm.endTime ?? defaults.form.endTime),
+            guestCount: toNumber(payloadForm.guestCount ?? defaults.form.guestCount),
+            packageName: String(payloadForm.packageName ?? defaults.form.packageName),
+            servicesRequested: String(payloadForm.servicesRequested ?? defaults.form.servicesRequested),
+            travelArea: String(payloadForm.travelArea ?? defaults.form.travelArea),
+            venueType: String(payloadForm.venueType ?? defaults.form.venueType),
+            heardAbout: String(payloadForm.heardAbout ?? defaults.form.heardAbout),
+            eventAddress: String(payloadForm.eventAddress ?? defaults.form.eventAddress),
+            notes: String(payloadForm.notes ?? defaults.form.notes),
+            termsAccepted: Boolean(payloadForm.termsAccepted ?? defaults.form.termsAccepted),
             paymentType: ['hourly', 'perface'].includes(String(payloadForm.paymentType))
                 ? String(payloadForm.paymentType)
                 : defaults.form.paymentType,
@@ -180,6 +200,15 @@ function applyQueryParams() {
     const start = params.get('start') ?? '';
     const end = params.get('end') ?? '';
     const hours = params.get('hours') ?? '';
+    const phone = params.get('phone') ?? '';
+    const guestCount = params.get('guest_count') ?? '';
+    const packageName = params.get('package_name') ?? '';
+    const services = params.get('services') ?? '';
+    const travelArea = params.get('travel_area') ?? '';
+    const venueType = params.get('venue_type') ?? '';
+    const heardAbout = params.get('heard_about') ?? '';
+    const address = params.get('address') ?? '';
+    const notes = params.get('notes') ?? '';
 
     if (name) {
         form.value.organizerName = name;
@@ -187,6 +216,10 @@ function applyQueryParams() {
 
     if (email) {
         form.value.organizerEmail = email;
+    }
+
+    if (phone) {
+        form.value.organizerPhone = phone;
     }
 
     if (date) {
@@ -203,6 +236,38 @@ function applyQueryParams() {
 
     if (hours) {
         form.value.hours = toNumber(hours);
+    }
+
+    if (guestCount) {
+        form.value.guestCount = toNumber(guestCount);
+    }
+
+    if (packageName) {
+        form.value.packageName = packageName;
+    }
+
+    if (services) {
+        form.value.servicesRequested = services;
+    }
+
+    if (travelArea) {
+        form.value.travelArea = travelArea;
+    }
+
+    if (venueType) {
+        form.value.venueType = venueType;
+    }
+
+    if (heardAbout) {
+        form.value.heardAbout = heardAbout;
+    }
+
+    if (address) {
+        form.value.eventAddress = address;
+    }
+
+    if (notes) {
+        form.value.notes = notes;
     }
 
     if (event && !form.value.eventName) {
@@ -310,9 +375,47 @@ const quoteText = computed(() => {
         lines.push(`Organizer: ${form.value.organizerName} (${form.value.organizerEmail})`.trim());
     }
 
+    if (form.value.organizerPhone) {
+        lines.push(`Phone: ${form.value.organizerPhone}`);
+    }
+
     if (form.value.eventName || form.value.eventDate) {
         lines.push(`Event: ${form.value.eventName} on ${form.value.eventDate || 'date TBC'}`.trim());
     }
+
+    if (toNumber(form.value.guestCount) > 0) {
+        lines.push(`Guest Count: ${Math.round(toNumber(form.value.guestCount))}`);
+    }
+
+    if (form.value.packageName) {
+        lines.push(`Package: ${form.value.packageName}`);
+    }
+
+    if (form.value.servicesRequested) {
+        lines.push(`Services: ${form.value.servicesRequested}`);
+    }
+
+    if (form.value.travelArea) {
+        lines.push(`Travel Area: ${form.value.travelArea}`);
+    }
+
+    if (form.value.venueType) {
+        lines.push(`Venue Type: ${form.value.venueType}`);
+    }
+
+    if (form.value.heardAbout) {
+        lines.push(`Heard About Us: ${form.value.heardAbout}`);
+    }
+
+    if (form.value.eventAddress) {
+        lines.push(`Address: ${form.value.eventAddress}`);
+    }
+
+    if (form.value.notes) {
+        lines.push(`Notes: ${form.value.notes}`);
+    }
+
+    lines.push(`Terms Accepted: ${form.value.termsAccepted ? 'Yes' : 'No'}`);
 
     lines.push(`Start Time: ${result.value.startDisplay}`);
     lines.push(`End Time: ${result.value.endDisplay}`);
@@ -388,13 +491,26 @@ function firstValidationError(errors) {
 function quotePayload() {
     const eventType = String(form.value.eventName ?? '').trim();
     const totalHours = toNumber(result.value.hoursDisplay);
+    const servicesRequested = String(form.value.servicesRequested ?? '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
 
     return {
         name: String(form.value.organizerName ?? '').trim(),
         email: String(form.value.organizerEmail ?? '').trim(),
+        phone: String(form.value.organizerPhone ?? '').trim() || null,
+        guest_count: toNumber(form.value.guestCount) > 0 ? Math.round(toNumber(form.value.guestCount)) : null,
+        package_name: String(form.value.packageName ?? '').trim() || null,
+        services_requested: servicesRequested.length ? servicesRequested : null,
+        travel_area: String(form.value.travelArea ?? '').trim() || null,
+        venue_type: String(form.value.venueType ?? '').trim() || null,
+        heard_about: String(form.value.heardAbout ?? '').trim() || null,
+        notes: String(form.value.notes ?? '').trim() || null,
+        terms_accepted: Boolean(form.value.termsAccepted),
         event_type: eventType || null,
         event_date: form.value.eventDate || null,
-        address: null,
+        address: String(form.value.eventAddress ?? '').trim() || null,
         start_time: form.value.startTime || null,
         end_time: form.value.endTime || null,
         total_hours: totalHours > 0 ? totalHours : null,
@@ -516,6 +632,15 @@ onMounted(async () => {
                             </div>
 
                             <div class="grid gap-4 md:grid-cols-2">
+                                <label class="field-label">Organizer Phone
+                                    <input v-model="form.organizerPhone" type="text" placeholder="e.g. 021 555 3921" class="input" />
+                                </label>
+                                <label class="field-label">Guest Count
+                                    <input v-model="form.guestCount" type="number" min="0" class="input" />
+                                </label>
+                            </div>
+
+                            <div class="grid gap-4 md:grid-cols-2">
                                 <label class="field-label">Event Name
                                     <input v-model="form.eventName" type="text" placeholder="e.g. Franklin Summer Fair" class="input" />
                                 </label>
@@ -532,6 +657,48 @@ onMounted(async () => {
                                     <input v-model="form.endTime" type="time" class="input" />
                                 </label>
                             </div>
+
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <label class="field-label">Package
+                                    <input v-model="form.packageName" type="text" placeholder="e.g. Party Sparkle Package" class="input" />
+                                </label>
+                                <label class="field-label">Services Requested (comma separated)
+                                    <input v-model="form.servicesRequested" type="text" placeholder="Face Painting, Glitter Tattoos" class="input" />
+                                </label>
+                            </div>
+
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <label class="field-label">Travel Area
+                                    <input v-model="form.travelArea" type="text" placeholder="e.g. Pukekohe / Franklin" class="input" />
+                                </label>
+                                <label class="field-label">Venue Type
+                                    <select v-model="form.venueType" class="input">
+                                        <option value="">Select venue</option>
+                                        <option value="indoor">Indoor</option>
+                                        <option value="outdoor">Outdoor</option>
+                                        <option value="mixed">Indoor + Outdoor</option>
+                                        <option value="unsure">Not sure yet</option>
+                                    </select>
+                                </label>
+                            </div>
+
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <label class="field-label">How They Heard About Us
+                                    <input v-model="form.heardAbout" type="text" placeholder="Google, Facebook, referral..." class="input" />
+                                </label>
+                                <label class="field-label">Event Address
+                                    <input v-model="form.eventAddress" type="text" placeholder="Street / suburb" class="input" />
+                                </label>
+                            </div>
+
+                            <label class="field-label">Notes
+                                <textarea v-model="form.notes" rows="3" class="input resize-y" placeholder="Extra event context or requests"></textarea>
+                            </label>
+
+                            <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
+                                <input v-model="form.termsAccepted" type="checkbox" class="h-4 w-4 rounded border-slate-400" />
+                                Terms accepted
+                            </label>
                         </section>
 
                         <section class="space-y-4">
@@ -645,6 +812,17 @@ onMounted(async () => {
                         </div>
 
                         <div class="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+                            <p><strong>Organizer:</strong> {{ form.organizerName || '—' }} ({{ form.organizerEmail || '—' }})</p>
+                            <p class="mt-1"><strong>Phone:</strong> {{ form.organizerPhone || '—' }}</p>
+                            <p class="mt-1"><strong>Guest Count:</strong> {{ form.guestCount || '—' }}</p>
+                            <p class="mt-1"><strong>Package:</strong> {{ form.packageName || '—' }}</p>
+                            <p class="mt-1"><strong>Services:</strong> {{ form.servicesRequested || '—' }}</p>
+                            <p class="mt-1"><strong>Travel Area:</strong> {{ form.travelArea || '—' }}</p>
+                            <p class="mt-1"><strong>Venue Type:</strong> {{ form.venueType || '—' }}</p>
+                            <p class="mt-1"><strong>Heard About Us:</strong> {{ form.heardAbout || '—' }}</p>
+                            <p class="mt-1"><strong>Address:</strong> {{ form.eventAddress || '—' }}</p>
+                            <p class="mt-1"><strong>Notes:</strong> {{ form.notes || '—' }}</p>
+                            <p class="mt-1"><strong>Terms Accepted:</strong> {{ form.termsAccepted ? 'Yes' : 'No' }}</p>
                             <p><strong>Base:</strong> {{ result.baseLine }}</p>
                             <p v-if="result.setupLine" class="mt-1"><strong>Setup:</strong> {{ result.setupLine }}</p>
                             <p class="mt-1"><strong>Travel:</strong> {{ result.travelLine }}</p>

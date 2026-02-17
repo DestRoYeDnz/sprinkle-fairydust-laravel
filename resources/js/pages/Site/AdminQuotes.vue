@@ -75,6 +75,15 @@ function emptyQuoteForm() {
     return {
         name: '',
         email: '',
+        phone: '',
+        guest_count: '',
+        package_name: '',
+        services_requested_input: '',
+        travel_area: '',
+        venue_type: '',
+        heard_about: '',
+        notes: '',
+        terms_accepted: false,
         event_type: '',
         event_date: '',
         start_time: '',
@@ -113,6 +122,15 @@ function buildPayload(source) {
     return {
         name: source.name,
         email: source.email,
+        phone: source.phone || null,
+        guest_count: toNullableInteger(source.guest_count),
+        package_name: source.package_name || null,
+        services_requested: normalizeServiceListInput(source.services_requested_input),
+        travel_area: source.travel_area || null,
+        venue_type: source.venue_type || null,
+        heard_about: source.heard_about || null,
+        notes: source.notes || null,
+        terms_accepted: Boolean(source.terms_accepted),
         event_type: source.event_type || null,
         event_date: source.event_date || null,
         start_time: source.start_time || null,
@@ -137,6 +155,50 @@ function toNullableNumber(value) {
     const number = Number(value);
 
     return Number.isFinite(number) ? number : null;
+}
+
+function toNullableInteger(value) {
+    if (value === '' || value === null || value === undefined) {
+        return null;
+    }
+
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+        return null;
+    }
+
+    return Math.max(0, Math.round(number));
+}
+
+function normalizeServiceListInput(value) {
+    if (typeof value !== 'string') {
+        return null;
+    }
+
+    const values = value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .map((item) => item.slice(0, 80));
+
+    if (!values.length) {
+        return null;
+    }
+
+    return [...new Set(values)];
+}
+
+function serviceListToInput(value) {
+    if (Array.isArray(value)) {
+        return value.join(', ');
+    }
+
+    if (typeof value === 'string') {
+        return value;
+    }
+
+    return '';
 }
 
 function normalizeAmount(value) {
@@ -169,6 +231,26 @@ function formatPaymentType(value) {
     }
 
     return '—';
+}
+
+function formatVenueType(value) {
+    if (value === 'indoor') {
+        return 'Indoor';
+    }
+
+    if (value === 'outdoor') {
+        return 'Outdoor';
+    }
+
+    if (value === 'mixed') {
+        return 'Indoor + Outdoor';
+    }
+
+    if (value === 'unsure') {
+        return 'Not sure yet';
+    }
+
+    return value || '—';
 }
 
 function hasCalculationBreakdown(item) {
@@ -263,7 +345,6 @@ function calculatorUrl(source) {
 
     if (source.event_type) {
         params.set('event', source.event_type);
-        params.set('type', source.event_type);
     }
 
     if (source.event_date) {
@@ -282,6 +363,42 @@ function calculatorUrl(source) {
         params.set('hours', String(source.total_hours));
     }
 
+    if (source.phone) {
+        params.set('phone', source.phone);
+    }
+
+    if (source.guest_count !== '' && source.guest_count !== null && source.guest_count !== undefined) {
+        params.set('guest_count', String(source.guest_count));
+    }
+
+    if (source.package_name) {
+        params.set('package_name', source.package_name);
+    }
+
+    if (source.services_requested_input) {
+        params.set('services', source.services_requested_input);
+    }
+
+    if (source.travel_area) {
+        params.set('travel_area', source.travel_area);
+    }
+
+    if (source.venue_type) {
+        params.set('venue_type', source.venue_type);
+    }
+
+    if (source.heard_about) {
+        params.set('heard_about', source.heard_about);
+    }
+
+    if (source.address) {
+        params.set('address', source.address);
+    }
+
+    if (source.notes) {
+        params.set('notes', source.notes);
+    }
+
     const query = params.toString();
 
     return query ? `/admin/calculator?${query}` : '/admin/calculator';
@@ -290,6 +407,17 @@ function calculatorUrl(source) {
 function applyQuoteData(item, quote) {
     item.name = quote.name ?? '';
     item.email = quote.email ?? '';
+    item.phone = quote.phone ?? '';
+    item.guest_count = quote.guest_count ?? '';
+    item.package_name = quote.package_name ?? '';
+    item.services_requested = Array.isArray(quote.services_requested) ? quote.services_requested : [];
+    item.services_requested_input = serviceListToInput(quote.services_requested);
+    item.travel_area = quote.travel_area ?? '';
+    item.venue_type = quote.venue_type ?? '';
+    item.heard_about = quote.heard_about ?? '';
+    item.notes = quote.notes ?? '';
+    item.terms_accepted = Boolean(quote.terms_accepted);
+    item.terms_accepted_at = quote.terms_accepted_at ?? null;
     item.anonymous_id = quote.anonymous_id ?? '';
     item.event_type = quote.event_type ?? '';
     item.event_date = normalizeDate(quote.event_date);
@@ -319,6 +447,17 @@ function normalizeQuote(quote) {
         id: quote.id,
         name: quote.name ?? '',
         email: quote.email ?? '',
+        phone: quote.phone ?? '',
+        guest_count: quote.guest_count ?? '',
+        package_name: quote.package_name ?? '',
+        services_requested: Array.isArray(quote.services_requested) ? quote.services_requested : [],
+        services_requested_input: serviceListToInput(quote.services_requested),
+        travel_area: quote.travel_area ?? '',
+        venue_type: quote.venue_type ?? '',
+        heard_about: quote.heard_about ?? '',
+        notes: quote.notes ?? '',
+        terms_accepted: Boolean(quote.terms_accepted),
+        terms_accepted_at: quote.terms_accepted_at ?? null,
         anonymous_id: quote.anonymous_id ?? '',
         event_type: quote.event_type ?? '',
         event_date: normalizeDate(quote.event_date),
@@ -350,6 +489,15 @@ function normalizeQuote(quote) {
         _draft: {
             name: quote.name ?? '',
             email: quote.email ?? '',
+            phone: quote.phone ?? '',
+            guest_count: quote.guest_count ?? '',
+            package_name: quote.package_name ?? '',
+            services_requested_input: serviceListToInput(quote.services_requested),
+            travel_area: quote.travel_area ?? '',
+            venue_type: quote.venue_type ?? '',
+            heard_about: quote.heard_about ?? '',
+            notes: quote.notes ?? '',
+            terms_accepted: Boolean(quote.terms_accepted),
             event_type: quote.event_type ?? '',
             event_date: normalizeDate(quote.event_date),
             start_time: normalizeTime(quote.start_time),
@@ -371,6 +519,15 @@ function startEdit(item) {
     item._draft = {
         name: item.name,
         email: item.email,
+        phone: item.phone,
+        guest_count: item.guest_count,
+        package_name: item.package_name,
+        services_requested_input: item.services_requested_input,
+        travel_area: item.travel_area,
+        venue_type: item.venue_type,
+        heard_about: item.heard_about,
+        notes: item.notes,
+        terms_accepted: item.terms_accepted,
         event_type: item.event_type,
         event_date: item.event_date,
         start_time: item.start_time,
@@ -600,6 +757,55 @@ onMounted(() => {
                     </div>
 
                     <div class="grid gap-4 md:grid-cols-2">
+                        <label class="field-label">Phone
+                            <input v-model="createForm.phone" type="text" class="input" />
+                        </label>
+                        <label class="field-label">Guest Count
+                            <input v-model="createForm.guest_count" type="number" min="1" class="input" />
+                        </label>
+                    </div>
+
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <label class="field-label">Package
+                            <input v-model="createForm.package_name" type="text" class="input" />
+                        </label>
+                        <label class="field-label">Services (comma separated)
+                            <input v-model="createForm.services_requested_input" type="text" class="input" />
+                        </label>
+                    </div>
+
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <label class="field-label">Travel Area
+                            <input v-model="createForm.travel_area" type="text" class="input" />
+                        </label>
+                        <label class="field-label">Venue Type
+                            <select v-model="createForm.venue_type" class="input">
+                                <option value="">Select venue</option>
+                                <option value="indoor">Indoor</option>
+                                <option value="outdoor">Outdoor</option>
+                                <option value="mixed">Indoor + Outdoor</option>
+                                <option value="unsure">Not sure yet</option>
+                            </select>
+                        </label>
+                    </div>
+
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <label class="field-label">How they heard about us
+                            <input v-model="createForm.heard_about" type="text" class="input" />
+                        </label>
+                        <label class="field-label">Terms Accepted
+                            <select v-model="createForm.terms_accepted" class="input">
+                                <option :value="false">No</option>
+                                <option :value="true">Yes</option>
+                            </select>
+                        </label>
+                    </div>
+
+                    <label class="field-label">Notes
+                        <textarea v-model="createForm.notes" class="input min-h-[90px] resize-y"></textarea>
+                    </label>
+
+                    <div class="grid gap-4 md:grid-cols-2">
                         <label class="field-label">Event Type
                             <input v-model="createForm.event_type" type="text" class="input" />
                         </label>
@@ -665,6 +871,55 @@ onMounted(() => {
                             </div>
 
                             <div class="grid gap-3 md:grid-cols-2">
+                                <label class="field-label">Phone
+                                    <input v-model="quote._draft.phone" type="text" class="input" />
+                                </label>
+                                <label class="field-label">Guest Count
+                                    <input v-model="quote._draft.guest_count" type="number" min="1" class="input" />
+                                </label>
+                            </div>
+
+                            <div class="grid gap-3 md:grid-cols-2">
+                                <label class="field-label">Package
+                                    <input v-model="quote._draft.package_name" type="text" class="input" />
+                                </label>
+                                <label class="field-label">Services (comma separated)
+                                    <input v-model="quote._draft.services_requested_input" type="text" class="input" />
+                                </label>
+                            </div>
+
+                            <div class="grid gap-3 md:grid-cols-2">
+                                <label class="field-label">Travel Area
+                                    <input v-model="quote._draft.travel_area" type="text" class="input" />
+                                </label>
+                                <label class="field-label">Venue Type
+                                    <select v-model="quote._draft.venue_type" class="input">
+                                        <option value="">Select venue</option>
+                                        <option value="indoor">Indoor</option>
+                                        <option value="outdoor">Outdoor</option>
+                                        <option value="mixed">Indoor + Outdoor</option>
+                                        <option value="unsure">Not sure yet</option>
+                                    </select>
+                                </label>
+                            </div>
+
+                            <div class="grid gap-3 md:grid-cols-2">
+                                <label class="field-label">How they heard about us
+                                    <input v-model="quote._draft.heard_about" type="text" class="input" />
+                                </label>
+                                <label class="field-label">Terms Accepted
+                                    <select v-model="quote._draft.terms_accepted" class="input">
+                                        <option :value="false">No</option>
+                                        <option :value="true">Yes</option>
+                                    </select>
+                                </label>
+                            </div>
+
+                            <label class="field-label">Notes
+                                <textarea v-model="quote._draft.notes" class="input min-h-[90px] resize-y"></textarea>
+                            </label>
+
+                            <div class="grid gap-3 md:grid-cols-2">
                                 <label class="field-label">Event Type
                                     <input v-model="quote._draft.event_type" type="text" class="input" />
                                 </label>
@@ -705,6 +960,15 @@ onMounted(() => {
                         <div v-else class="space-y-1 text-sm text-slate-700">
                             <p><strong>Name:</strong> {{ quote.name }}</p>
                             <p><strong>Email:</strong> {{ quote.email }}</p>
+                            <p><strong>Phone:</strong> {{ quote.phone || '—' }}</p>
+                            <p><strong>Guest Count:</strong> {{ quote.guest_count || '—' }}</p>
+                            <p><strong>Package:</strong> {{ quote.package_name || '—' }}</p>
+                            <p><strong>Services:</strong> {{ quote.services_requested_input || '—' }}</p>
+                            <p><strong>Travel Area:</strong> {{ quote.travel_area || '—' }}</p>
+                            <p><strong>Venue Type:</strong> {{ formatVenueType(quote.venue_type) }}</p>
+                            <p><strong>Heard About Us:</strong> {{ quote.heard_about || '—' }}</p>
+                            <p><strong>Terms Accepted:</strong> {{ quote.terms_accepted ? 'Yes' : 'No' }}</p>
+                            <p><strong>Terms Accepted At:</strong> {{ formatDateTime(quote.terms_accepted_at) }}</p>
                             <p><strong>Anonymous ID:</strong> {{ quote.anonymous_id || '—' }}</p>
                             <p><strong>Event Type:</strong> {{ quote.event_type || '—' }}</p>
                             <p><strong>Event Date:</strong> {{ quote.event_date || '—' }}</p>
@@ -722,6 +986,7 @@ onMounted(() => {
                                 <p><strong>Total:</strong> {{ formatCurrency(quote.calc_total_amount) }}</p>
                             </div>
                             <p><strong>Address:</strong> {{ quote.address || '—' }}</p>
+                            <p><strong>Notes:</strong> {{ quote.notes || '—' }}</p>
                             <p class="status-line">
                                 <strong>Email Status:</strong>
                                 <span :class="emailStatusPillClass(quote)">{{ formatEmailSendStatus(quote) }}</span>

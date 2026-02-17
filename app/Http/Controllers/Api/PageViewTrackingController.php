@@ -45,7 +45,7 @@ class PageViewTrackingController extends Controller
             'path' => $normalizedPath,
             'event_type' => $eventType,
             'duration_seconds' => $durationSeconds,
-            'referrer' => $validated['referrer'] ?? null,
+            'referrer' => $this->extractExternalReferrer($validated['referrer'] ?? null, $request),
             'country_code' => $this->resolveCountryCode($request),
             'user_agent' => substr((string) $request->userAgent(), 0, 512),
             'viewed_at' => now(),
@@ -65,6 +65,79 @@ class PageViewTrackingController extends Controller
         }
 
         return substr($sanitized, 0, 80);
+    }
+
+    private function extractExternalReferrer(?string $referrer, Request $request): ?string
+    {
+        if ($referrer === null) {
+            return null;
+        }
+
+        $candidate = trim($referrer);
+
+        if ($candidate === '' || str_starts_with($candidate, '/')) {
+            return null;
+        }
+
+        $parsedHost = parse_url($candidate, PHP_URL_HOST);
+        $parsedScheme = parse_url($candidate, PHP_URL_SCHEME);
+
+        if (! is_string($parsedHost) || trim($parsedHost) === '') {
+            if (! str_contains($candidate, '://')) {
+                $fallback = 'https://'.$candidate;
+                $parsedHost = parse_url($fallback, PHP_URL_HOST);
+                $parsedScheme = parse_url($fallback, PHP_URL_SCHEME);
+            }
+        }
+
+        if (! is_string($parsedHost) || trim($parsedHost) === '') {
+            return null;
+        }
+
+        $scheme = strtolower(trim((string) $parsedScheme));
+
+        if ($scheme !== '' && ! in_array($scheme, ['http', 'https'], true)) {
+            return null;
+        }
+
+        $referrerHost = $this->normalizeHost($parsedHost);
+
+        if ($referrerHost === '') {
+            return null;
+        }
+
+        $internalHosts = array_filter([
+            $this->normalizeHost((string) parse_url((string) config('app.url', ''), PHP_URL_HOST)),
+            $this->normalizeHost($request->getHost()),
+        ]);
+
+        foreach ($internalHosts as $internalHost) {
+            if ($internalHost === '') {
+                continue;
+            }
+
+            if ($referrerHost === $internalHost || str_ends_with($referrerHost, '.'.$internalHost)) {
+                return null;
+            }
+        }
+
+        return substr($referrerHost, 0, 255);
+    }
+
+    private function normalizeHost(?string $host): string
+    {
+        if (! is_string($host)) {
+            return '';
+        }
+
+        $normalized = strtolower(trim($host));
+        $normalized = trim($normalized, '.');
+
+        if (str_starts_with($normalized, 'www.')) {
+            $normalized = substr($normalized, 4);
+        }
+
+        return $normalized;
     }
 
     private function resolveCountryCode(Request $request): string

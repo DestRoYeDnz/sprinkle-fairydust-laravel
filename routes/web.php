@@ -15,7 +15,12 @@ Route::get('/', function () {
 })->name('home');
 
 Route::get('about', fn () => Inertia::render('Site/About'))->name('about');
+Route::get('faq', fn () => Inertia::render('Site/Faq'))->name('faq');
+Route::get('terms-and-conditions', fn () => Inertia::render('Site/Terms'))->name('terms');
 Route::get('services', fn () => Inertia::render('Site/Services'))->name('services');
+Route::get('face-painting', fn () => Inertia::render('Site/FacePainting'))->name('face-painting');
+Route::get('glitter-tattoos', fn () => Inertia::render('Site/GlitterTattoos'))->name('glitter-tattoos');
+Route::get('festival-face-painting', fn () => Inertia::render('Site/FestivalFacePainting'))->name('festival-face-painting');
 Route::get('events', fn () => Inertia::render('Site/Events'))->name('events');
 Route::get('gallery', fn () => Inertia::render('Site/Gallery'))->name('gallery');
 Route::get('designs', fn () => Inertia::render('Site/Designs'))->name('designs');

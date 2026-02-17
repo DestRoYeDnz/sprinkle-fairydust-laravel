@@ -7,6 +7,8 @@ const page = usePage();
 const links = [
     { label: 'Home', href: '/' },
     { label: 'About', href: '/about' },
+    { label: 'FAQ', href: '/faq' },
+    { label: 'Terms', href: '/terms-and-conditions' },
     { label: 'Services', href: '/services' },
     { label: 'Events', href: '/events' },
     { label: 'Gallery', href: '/gallery' },
@@ -17,6 +19,7 @@ const links = [
 
 const currentPath = computed(() => page.url.split('?')[0]);
 const isAdminPage = computed(() => currentPath.value === '/admin' || currentPath.value.startsWith('/admin/'));
+const showMobileQuoteCta = computed(() => !isAdminPage.value && currentPath.value !== '/quote');
 const starsRef = ref(null);
 
 function isActive(href) {
@@ -84,11 +87,19 @@ onBeforeUnmount(() => {
 
         <slot />
 
+        <Link v-if="showMobileQuoteCta" href="/quote" class="mobile-quote-cta">
+            Get Quote
+        </Link>
+
         <footer class="footer-glow">
             <p>
                 © {{ new Date().getFullYear() }}
                 <span class="brand">Sprinkle Fairydust</span>
                 · Designed with love by Melody ✨
+            </p>
+
+            <p class="footer-links">
+                <Link href="/terms-and-conditions">Terms and Conditions</Link>
             </p>
 
             <div class="social-links">
@@ -149,6 +160,17 @@ onBeforeUnmount(() => {
     font-weight: 600;
 }
 
+.footer-links {
+    margin-top: 0.4rem;
+}
+
+.footer-links a {
+    color: #dbeafe;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
 .social-links {
     display: flex;
     justify-content: center;
@@ -184,6 +206,27 @@ onBeforeUnmount(() => {
 .social-links a:hover svg {
     transform: scale(1.1);
     fill: #dff7ff;
+}
+
+.mobile-quote-cta {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 80;
+    border-radius: 999px;
+    border: 1px solid rgba(224, 247, 255, 0.95);
+    background: linear-gradient(135deg, #ecfeff, #bae6fd);
+    color: #0f172a;
+    font-weight: 700;
+    font-size: 0.85rem;
+    padding: 0.6rem 0.95rem;
+    box-shadow: 0 12px 24px rgba(2, 6, 23, 0.25);
+}
+
+@media (min-width: 768px) {
+    .mobile-quote-cta {
+        display: none;
+    }
 }
 
 @keyframes rainbowFlow {

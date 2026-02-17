@@ -19,8 +19,35 @@ it('records anonymous page view events with country and sanitized IDs', function
     expect($pageView->anonymous_id)->toBe('anon-ABC123')
         ->and($pageView->event_type)->toBe('view')
         ->and($pageView->duration_seconds)->toBeNull()
+        ->and($pageView->referrer)->toBe('example.com')
         ->and($pageView->country_code)->toBe('US')
         ->and($pageView->page_key)->toBe('gallery');
+});
+
+it('stores only external referrer domains', function () {
+    config([
+        'app.url' => 'https://sprinklefairydust.co.nz',
+    ]);
+
+    $this->postJson('/api/tracking/page-views', [
+        'anonymous_id' => 'anon_ref_internal',
+        'page_key' => 'quote',
+        'path' => '/quote',
+        'referrer' => 'https://sprinklefairydust.co.nz/services',
+    ])->assertCreated();
+
+    $internalReferrerEvent = PageView::query()->where('anonymous_id', 'anon_ref_internal')->firstOrFail();
+    expect($internalReferrerEvent->referrer)->toBeNull();
+
+    $this->postJson('/api/tracking/page-views', [
+        'anonymous_id' => 'anon_ref_external',
+        'page_key' => 'quote',
+        'path' => '/quote',
+        'referrer' => 'https://www.google.com/search?q=face+painting',
+    ])->assertCreated();
+
+    $externalReferrerEvent = PageView::query()->where('anonymous_id', 'anon_ref_external')->firstOrFail();
+    expect($externalReferrerEvent->referrer)->toBe('google.com');
 });
 
 it('records engagement duration events', function () {

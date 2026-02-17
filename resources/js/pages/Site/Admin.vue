@@ -1,6 +1,7 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3';
 import { computed, onMounted, ref } from 'vue';
+import { quotes as adminQuotesRoute } from '@/routes/admin';
 import AdminMenu from '@/components/admin/AdminMenu.vue';
 import SprinkleLayout from '../../layouts/SprinkleLayout.vue';
 
@@ -34,6 +35,23 @@ function truncate(value, maxLength = 140) {
     }
 
     return `${text.slice(0, maxLength)}...`;
+}
+
+function latestQuoteCardHref(item) {
+    const quoteId = String(item?.id ?? '').trim();
+    const adminQuotesUrl = quoteId
+        ? adminQuotesRoute.url({
+            query: {
+                quote_id: quoteId,
+            },
+        })
+        : adminQuotesRoute.url();
+
+    if (!quoteId) {
+        return adminQuotesUrl;
+    }
+
+    return `${adminQuotesUrl}#quote-${quoteId}`;
 }
 
 async function loadQuotes() {
@@ -133,14 +151,19 @@ onMounted(() => {
                         <li
                             v-for="item in latestQuotes"
                             :key="item.id"
-                            class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"
+                            class="rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-700"
                         >
-                            <p><strong>{{ item.name }}</strong> · {{ item.email }}</p>
-                            <p class="mt-1">
-                                {{ item.event_type || 'Event type not set' }}
-                                <span v-if="item.event_date"> on {{ item.event_date }}</span>
-                            </p>
-                            <p class="mt-1 text-xs text-slate-500">Created {{ formatDateTime(item.created_at) }}</p>
+                            <Link
+                                :href="latestQuoteCardHref(item)"
+                                class="block rounded-xl p-3 transition hover:bg-sky-50 focus-visible:ring-2 focus-visible:ring-sky-300 focus-visible:outline-none"
+                            >
+                                <p><strong>{{ item.name }}</strong> · {{ item.email }}</p>
+                                <p class="mt-1">
+                                    {{ item.event_type || 'Event type not set' }}
+                                    <span v-if="item.event_date"> on {{ item.event_date }}</span>
+                                </p>
+                                <p class="mt-1 text-xs text-slate-500">Created {{ formatDateTime(item.created_at) }}</p>
+                            </Link>
                         </li>
                     </ul>
                 </section>

@@ -314,48 +314,6 @@ function formatDateTime(value) {
     return new Date(value).toLocaleString();
 }
 
-function formatEmailSendStatus(item) {
-    if (!item.email_send_status) {
-        return 'Not sent';
-    }
-
-    const status = item.email_send_status === 'sent' ? 'Sent' : item.email_send_status;
-    const attempted = formatDateTime(item.email_send_attempted_at);
-
-    return `${status} (${attempted})`;
-}
-
-function formatConfirmationStatus(item) {
-    if (item.client_suggested_time_at) {
-        return `New time suggested at ${formatDateTime(item.client_suggested_time_at)}`;
-    }
-
-    if (item.artist_declined_at) {
-        const declinedAt = formatDateTime(item.artist_declined_at);
-        const reason = item.artist_decline_reason ? ` (${item.artist_decline_reason})` : '';
-
-        return `Declined at ${declinedAt}${reason}`;
-    }
-
-    if (!item.client_confirmed_at) {
-        return 'Pending confirmation';
-    }
-
-    return `Confirmed at ${formatDateTime(item.client_confirmed_at)}`;
-}
-
-function formatOpenTrackingStatus(item) {
-    if (!item.email_opened_at) {
-        return 'Not opened yet';
-    }
-
-    const count = Number(item.email_open_count ?? 0);
-    const countText = `${count} ${count === 1 ? 'open' : 'opens'}`;
-    const lastOpened = formatDateTime(item.email_last_opened_at || item.email_opened_at);
-
-    return `${countText} (last ${lastOpened})`;
-}
-
 function emailStatusPillClass(item) {
     if (item.email_send_status === 'sent') {
         return 'status-pill status-pill--success';
@@ -390,6 +348,51 @@ function confirmedStatusPillClass(item) {
     }
 
     return 'status-pill status-pill--pending';
+}
+
+function emailStatusPillText(item) {
+    if (item.email_send_status === 'sent') {
+        return 'Email Sent';
+    }
+
+    if (item.email_send_status === 'failed') {
+        return 'Email Failed';
+    }
+
+    return 'Email Not Sent';
+}
+
+function openedStatusPillText(item) {
+    if (!item.email_opened_at) {
+        return 'Not Opened';
+    }
+
+    const count = Number(item.email_open_count ?? 0);
+
+    return `${count} ${count === 1 ? 'Open' : 'Opens'}`;
+}
+
+function bookingStatusPillText(item) {
+    if (item.client_confirmed_at) {
+        return 'Confirmed';
+    }
+
+    if (item.client_suggested_time_at) {
+        return 'Time Suggested';
+    }
+
+    if (item.artist_declined_at) {
+        return 'Declined';
+    }
+
+    return 'Pending';
+}
+
+function bookingStatusUpdatedAt(item) {
+    return item.client_confirmed_at
+        || item.client_suggested_time_at
+        || item.artist_declined_at
+        || null;
 }
 
 function calculatorUrl(source) {
@@ -1180,30 +1183,101 @@ onMounted(() => {
                             </div>
                         </div>
 
-                        <div v-else class="space-y-3 text-sm text-slate-700">
-                            <dl class="quote-grid">
-                                <div class="quote-item"><dt>Name</dt><dd>{{ quote.name || '—' }}</dd></div>
-                                <div class="quote-item"><dt>Email</dt><dd>{{ quote.email || '—' }}</dd></div>
-                                <div class="quote-item"><dt>Phone</dt><dd>{{ quote.phone || '—' }}</dd></div>
-                                <div class="quote-item"><dt>Guest Count</dt><dd>{{ quote.guest_count || '—' }}</dd></div>
-                                <div class="quote-item"><dt>Package</dt><dd>{{ quote.package_name || '—' }}</dd></div>
-                                <div class="quote-item"><dt>Services</dt><dd>{{ quote.services_requested_input || '—' }}</dd></div>
-                                <div class="quote-item"><dt>Travel Area</dt><dd>{{ quote.travel_area || '—' }}</dd></div>
-                                <div class="quote-item"><dt>Venue Type</dt><dd>{{ formatVenueType(quote.venue_type) }}</dd></div>
-                                <div class="quote-item"><dt>Heard About</dt><dd>{{ quote.heard_about || '—' }}</dd></div>
-                                <div class="quote-item"><dt>Event Type</dt><dd>{{ quote.event_type || '—' }}</dd></div>
-                                <div class="quote-item"><dt>Event Date</dt><dd>{{ quote.event_date || '—' }}</dd></div>
-                                <div class="quote-item"><dt>Start / End</dt><dd>{{ quote.start_time || '—' }} - {{ quote.end_time || '—' }}</dd></div>
-                                <div class="quote-item"><dt>Total Hours</dt><dd>{{ quote.total_hours ?? '—' }}</dd></div>
-                                <div class="quote-item"><dt>Address</dt><dd>{{ quote.address || '—' }}</dd></div>
-                                <div class="quote-item"><dt>Terms</dt><dd>{{ quote.terms_accepted ? 'Yes' : 'No' }}</dd></div>
-                                <div class="quote-item"><dt>Terms At</dt><dd>{{ formatDateTime(quote.terms_accepted_at) }}</dd></div>
-                                <div class="quote-item"><dt>Anonymous ID</dt><dd>{{ quote.anonymous_id || '—' }}</dd></div>
-                                <div class="quote-item quote-item--full"><dt>Notes</dt><dd class="whitespace-pre-line break-words">{{ quote.notes || '—' }}</dd></div>
-                            </dl>
+                        <div v-else class="quote-card text-sm text-slate-700">
+                            <section class="quote-section quote-section--header">
+                                <div>
+                                    <p class="quote-client-name">{{ quote.name || 'Unnamed Client' }}</p>
+                                    <p class="quote-client-contact">
+                                        {{ quote.email || '—' }}
+                                        <span v-if="quote.phone"> · {{ quote.phone }}</span>
+                                    </p>
+                                </div>
 
-                            <div v-if="hasCalculationBreakdown(quote)" class="quote-subcard">
-                                <p class="quote-subcard-title">Calculation</p>
+                                <div class="quote-pill-row">
+                                    <span class="meta-pill">Quote #{{ quote.id }}</span>
+                                    <span class="meta-pill meta-pill--soft">{{ quote.event_type || 'Event Type Pending' }}</span>
+                                    <span v-if="quote.event_date" class="meta-pill meta-pill--soft">{{ quote.event_date }}</span>
+                                    <span v-if="quote.guest_count" class="meta-pill meta-pill--soft">{{ quote.guest_count }} guests</span>
+                                </div>
+                            </section>
+
+                            <section class="quote-section">
+                                <p class="quote-section-title">Status</p>
+
+                                <div class="quote-pill-row">
+                                    <span :class="emailStatusPillClass(quote)">{{ emailStatusPillText(quote) }}</span>
+                                    <span :class="openedStatusPillClass(quote)">{{ openedStatusPillText(quote) }}</span>
+                                    <span :class="confirmedStatusPillClass(quote)">{{ bookingStatusPillText(quote) }}</span>
+                                    <span :class="quote.terms_accepted ? 'meta-pill meta-pill--ok' : 'meta-pill meta-pill--warn'">
+                                        {{ quote.terms_accepted ? 'Terms Accepted' : 'Terms Missing' }}
+                                    </span>
+                                </div>
+
+                                <div class="status-meta">
+                                    <p v-if="quote.email_send_attempted_at">
+                                        <strong>Email attempted:</strong> {{ formatDateTime(quote.email_send_attempted_at) }}
+                                    </p>
+                                    <p v-if="quote.email_last_opened_at || quote.email_opened_at">
+                                        <strong>Last opened:</strong> {{ formatDateTime(quote.email_last_opened_at || quote.email_opened_at) }}
+                                    </p>
+                                    <p v-if="bookingStatusUpdatedAt(quote)">
+                                        <strong>Booking updated:</strong> {{ formatDateTime(bookingStatusUpdatedAt(quote)) }}
+                                    </p>
+                                    <p v-if="quote.terms_accepted_at">
+                                        <strong>Terms accepted:</strong> {{ formatDateTime(quote.terms_accepted_at) }}
+                                    </p>
+                                    <p
+                                        v-if="
+                                            !quote.email_send_attempted_at
+                                                && !quote.email_last_opened_at
+                                                && !quote.email_opened_at
+                                                && !bookingStatusUpdatedAt(quote)
+                                                && !quote.terms_accepted_at
+                                        "
+                                    >
+                                        Status timestamps will appear once activity starts.
+                                    </p>
+                                </div>
+                            </section>
+
+                            <section class="quote-section">
+                                <p class="quote-section-title">Event & Location</p>
+
+                                <div class="quote-pill-row">
+                                    <span v-if="quote.package_name" class="meta-pill meta-pill--brand">{{ quote.package_name }}</span>
+                                    <span v-if="quote.venue_type" class="meta-pill meta-pill--soft">{{ formatVenueType(quote.venue_type) }}</span>
+                                    <span v-if="quote.start_time || quote.end_time" class="meta-pill meta-pill--soft">
+                                        {{ quote.start_time || '—' }} - {{ quote.end_time || '—' }}
+                                    </span>
+                                    <span v-if="quote.total_hours !== null && quote.total_hours !== ''" class="meta-pill meta-pill--soft">
+                                        {{ quote.total_hours }} hrs
+                                    </span>
+                                </div>
+
+                                <dl class="quote-grid">
+                                    <div class="quote-item"><dt>Event Type</dt><dd>{{ quote.event_type || '—' }}</dd></div>
+                                    <div class="quote-item"><dt>Event Date</dt><dd>{{ quote.event_date || '—' }}</dd></div>
+                                    <div class="quote-item"><dt>Start / End</dt><dd>{{ quote.start_time || '—' }} - {{ quote.end_time || '—' }}</dd></div>
+                                    <div class="quote-item"><dt>Total Hours</dt><dd>{{ quote.total_hours ?? '—' }}</dd></div>
+                                    <div class="quote-item"><dt>Address</dt><dd>{{ quote.address || '—' }}</dd></div>
+                                    <div class="quote-item"><dt>Travel Area</dt><dd>{{ quote.travel_area || '—' }}</dd></div>
+                                    <div class="quote-item"><dt>Venue Type</dt><dd>{{ formatVenueType(quote.venue_type) }}</dd></div>
+                                    <div class="quote-item"><dt>Heard About</dt><dd>{{ quote.heard_about || '—' }}</dd></div>
+                                </dl>
+                            </section>
+
+                            <section class="quote-section">
+                                <p class="quote-section-title">Services & Notes</p>
+
+                                <dl class="quote-grid">
+                                    <div class="quote-item quote-item--full"><dt>Services</dt><dd>{{ quote.services_requested_input || '—' }}</dd></div>
+                                    <div class="quote-item"><dt>Anonymous ID</dt><dd>{{ quote.anonymous_id || '—' }}</dd></div>
+                                    <div class="quote-item quote-item--full"><dt>Notes</dt><dd class="whitespace-pre-line break-words">{{ quote.notes || '—' }}</dd></div>
+                                </dl>
+                            </section>
+
+                            <section v-if="hasCalculationBreakdown(quote)" class="quote-section quote-section--calc">
+                                <p class="quote-section-title">Calculation</p>
                                 <dl class="quote-grid quote-grid--calc">
                                     <div class="quote-item"><dt>Payment Type</dt><dd>{{ formatPaymentType(quote.calc_payment_type) }}</dd></div>
                                     <div class="quote-item"><dt>Base</dt><dd>{{ formatCurrency(quote.calc_base_amount) }}</dd></div>
@@ -1215,31 +1289,23 @@ onMounted(() => {
                                     <div v-if="shouldShowGst(quote)" class="quote-item"><dt>GST</dt><dd>{{ formatCurrency(quote.calc_gst_amount) }}</dd></div>
                                     <div class="quote-item"><dt>Total</dt><dd>{{ formatCurrency(quote.calc_total_amount) }}</dd></div>
                                 </dl>
-                            </div>
+                            </section>
 
-                            <p v-if="quote.artist_decline_reason" class="compact-note"><strong>Decline Reason:</strong> {{ quote.artist_decline_reason }}</p>
-                            <p v-if="quote.client_suggested_time_at" class="compact-note">
-                                <strong>Suggested New Time:</strong>
-                                {{ quote.client_suggested_event_date || '—' }}
-                                {{ quote.client_suggested_start_time || '—' }} - {{ quote.client_suggested_end_time || '—' }}
-                                (submitted {{ formatDateTime(quote.client_suggested_time_at) }})
-                            </p>
-                            <p v-if="quote.client_suggested_time_notes" class="compact-note"><strong>Suggestion Notes:</strong> {{ quote.client_suggested_time_notes }}</p>
+                            <section
+                                v-if="quote.artist_decline_reason || quote.client_suggested_time_at || quote.client_suggested_time_notes"
+                                class="quote-section quote-section--attention"
+                            >
+                                <p v-if="quote.artist_decline_reason" class="compact-note"><strong>Decline Reason:</strong> {{ quote.artist_decline_reason }}</p>
+                                <p v-if="quote.client_suggested_time_at" class="compact-note">
+                                    <strong>Suggested New Time:</strong>
+                                    {{ quote.client_suggested_event_date || '—' }}
+                                    {{ quote.client_suggested_start_time || '—' }} - {{ quote.client_suggested_end_time || '—' }}
+                                    (submitted {{ formatDateTime(quote.client_suggested_time_at) }})
+                                </p>
+                                <p v-if="quote.client_suggested_time_notes" class="compact-note"><strong>Suggestion Notes:</strong> {{ quote.client_suggested_time_notes }}</p>
+                            </section>
 
-                            <p class="status-line">
-                                <strong>Email Status:</strong>
-                                <span :class="emailStatusPillClass(quote)">{{ formatEmailSendStatus(quote) }}</span>
-                            </p>
-                            <p class="status-line">
-                                <strong>Opened:</strong>
-                                <span :class="openedStatusPillClass(quote)">{{ formatOpenTrackingStatus(quote) }}</span>
-                            </p>
-                            <p class="status-line">
-                                <strong>Booking Status:</strong>
-                                <span :class="confirmedStatusPillClass(quote)">{{ formatConfirmationStatus(quote) }}</span>
-                            </p>
-
-                            <div class="mt-2 flex flex-wrap gap-2">
+                            <div class="quote-actions">
                                 <Link class="primary-btn" :href="calculatorUrl(quote)">Calculate</Link>
                                 <button class="primary-btn" :disabled="quote._sending_email" @click="sendQuoteEmail(quote)">
                                     {{ quote._sending_email ? 'Sending...' : 'Send Quote Email' }}
@@ -1475,27 +1541,134 @@ onMounted(() => {
     gap: 0.5rem;
 }
 
+.quote-card {
+    display: grid;
+    gap: 0.7rem;
+}
+
+.quote-section {
+    border-radius: 0.9rem;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    padding: 0.75rem 0.8rem;
+}
+
+.quote-section--header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.65rem;
+    background: linear-gradient(135deg, #f8fbff 0%, #f0f9ff 100%);
+}
+
+.quote-section--calc {
+    background: #f8fbff;
+}
+
+.quote-section--attention {
+    border-color: #fecdd3;
+    background: #fff7f9;
+}
+
+.quote-section-title {
+    margin: 0 0 0.55rem 0;
+    color: #64748b;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.quote-client-name {
+    margin: 0;
+    color: #0f172a;
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.25;
+}
+
+.quote-client-contact {
+    margin: 0.2rem 0 0 0;
+    color: #475569;
+    font-size: 0.84rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.quote-pill-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.55rem;
+}
+
+.meta-pill {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 9999px;
+    border: 1px solid #dbeafe;
+    background: #eff6ff;
+    color: #1e3a8a;
+    padding: 0.2rem 0.65rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.meta-pill--soft {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+    color: #334155;
+}
+
+.meta-pill--brand {
+    border-color: #a5f3fc;
+    background: #ecfeff;
+    color: #155e75;
+}
+
+.meta-pill--ok {
+    border-color: #86efac;
+    background: #f0fdf4;
+    color: #166534;
+}
+
+.meta-pill--warn {
+    border-color: #fda4af;
+    background: #fff1f2;
+    color: #9f1239;
+}
+
 .quote-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.4rem 0.9rem;
 }
 
+.quote-grid--meta {
+    grid-template-columns: minmax(0, 1fr);
+}
+
 .quote-grid--calc {
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    grid-template-columns: minmax(0, 1fr);
 }
 
 .quote-item {
     display: grid;
-    grid-template-columns: 96px minmax(0, 1fr);
+    grid-template-columns: 98px minmax(0, 1fr);
     align-items: start;
     gap: 0.35rem;
     line-height: 1.3;
 }
 
 .quote-item dt {
+    color: #64748b;
+    font-size: 0.72rem;
     font-weight: 700;
-    color: #475569;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
 .quote-item dd {
@@ -1509,32 +1682,33 @@ onMounted(() => {
     grid-column: 1 / -1;
 }
 
-.quote-subcard {
-    border-radius: 0.75rem;
-    border: 1px solid #e2e8f0;
-    background: #fff;
-    padding: 0.65rem 0.75rem;
-}
-
-.quote-subcard-title {
-    margin: 0 0 0.4rem 0;
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: #64748b;
-}
-
 .compact-note {
     margin: 0;
-    line-height: 1.35;
+    line-height: 1.4;
 }
 
-.status-line {
+.quote-actions {
+    margin-top: 0.1rem;
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
-    gap: 0.45rem;
+    gap: 0.5rem;
+}
+
+.status-meta {
+    display: grid;
+    gap: 0.25rem;
+    margin-top: 0.05rem;
+    color: #475569;
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
+.status-meta p {
+    margin: 0;
+}
+
+.status-meta strong {
+    color: #334155;
 }
 
 .status-pill {
@@ -1564,5 +1738,22 @@ onMounted(() => {
     border-color: #fda4af;
     background: #fff1f2;
     color: #9f1239;
+}
+
+@media (max-width: 640px) {
+    .quote-item {
+        grid-template-columns: 1fr;
+        gap: 0.15rem;
+    }
+
+    .quote-actions {
+        gap: 0.45rem;
+    }
+}
+
+@media (min-width: 880px) {
+    .quote-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 </style>

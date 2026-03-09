@@ -53,6 +53,10 @@ function defaultSettings() {
             packageBaseAmount: 360,
             selectedAddOns: [],
             customAddOns: [],
+            includeDiscount: false,
+            discountName: 'Discount',
+            discountDescription: '',
+            discountAmount: 20,
             includeSetup: false,
             setupRate: 60,
             setupHours: 2,
@@ -154,6 +158,10 @@ function normalizeSettings(source) {
             packageBaseAmount: toNumber(payloadForm.packageBaseAmount, defaults.form.packageBaseAmount),
             selectedAddOns: normalizeStringArray(payloadForm.selectedAddOns ?? defaults.form.selectedAddOns),
             customAddOns: normalizeCustomAddOns(payloadForm.customAddOns ?? defaults.form.customAddOns),
+            includeDiscount: Boolean(payloadForm.includeDiscount ?? defaults.form.includeDiscount),
+            discountName: String(payloadForm.discountName ?? defaults.form.discountName).trim().slice(0, 120),
+            discountDescription: '',
+            discountAmount: Math.max(0, toNumber(payloadForm.discountAmount, defaults.form.discountAmount)),
             includeSetup: Boolean(payloadForm.includeSetup ?? defaults.form.includeSetup),
             setupRate: toNumber(payloadForm.setupRate, defaults.form.setupRate),
             setupHours: toNumber(payloadForm.setupHours, defaults.form.setupHours),
@@ -408,6 +416,26 @@ onMounted(() => {
                         <input v-model="form.form.includeGST" type="checkbox" class="h-4 w-4 rounded border-slate-400" />
                         Include GST (15%)
                     </label>
+                </section>
+
+                <section class="panel">
+                    <h2 class="section-title">Discount Defaults</h2>
+
+                    <label class="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
+                        <input v-model="form.form.includeDiscount" type="checkbox" class="h-4 w-4 rounded border-slate-400" />
+                        Apply discount by default
+                    </label>
+
+                    <div class="mt-3 grid gap-4 md:grid-cols-2">
+                        <label class="field-label">
+                            Discount Name
+                            <input v-model="form.form.discountName" type="text" class="input" />
+                        </label>
+                        <label class="field-label">
+                            Discount Amount ($)
+                            <input v-model.number="form.form.discountAmount" type="number" min="0" step="0.01" class="input" />
+                        </label>
+                    </div>
                 </section>
 
                 <section class="panel">

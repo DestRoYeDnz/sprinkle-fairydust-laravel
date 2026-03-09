@@ -7,14 +7,11 @@ import { initializeTheme } from './composables/useAppearance';
 import { initPageTracking } from './lib/pageTracking';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const pages = import.meta.glob<DefineComponent>('./pages/**/*.vue');
 
 createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
-    resolve: (name) =>
-        resolvePageComponent(
-            `./pages/${name}.vue`,
-            import.meta.glob<DefineComponent>('./pages/**/*.vue'),
-        ),
+    resolve: (name) => resolvePageComponent(`./pages/${name}.vue`, pages),
     setup({ el, App, props, plugin }) {
         createApp({ render: () => h(App, props) })
             .use(plugin)

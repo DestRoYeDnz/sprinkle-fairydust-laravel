@@ -46,7 +46,7 @@ class QuoteController extends Controller
             $start = Carbon::createFromFormat('H:i', $validated['start_time']);
             $end = Carbon::createFromFormat('H:i', $validated['end_time']);
 
-            $minutes = $end->diffInMinutes($start, false);
+            $minutes = $start->diffInMinutes($end, false);
             if ($minutes <= 0) {
                 return response()->json([
                     'error' => 'End time must be after start time.',
@@ -92,6 +92,7 @@ class QuoteController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Quote saved and email sent successfully!',
+                'redirect_url' => route('quote.overview'),
             ]);
         } catch (\Throwable $exception) {
             return response()->json([
@@ -132,6 +133,7 @@ class QuoteController extends Controller
             'heard_about' => $quote->heard_about,
             'address' => $quote->address,
             'notes' => $quote->notes,
+            'terms_accepted' => $quote->terms_accepted ? '1' : null,
         ]);
 
         $calculatorLink = $calculatorParams !== ''

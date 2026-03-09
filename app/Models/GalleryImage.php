@@ -19,9 +19,12 @@ class GalleryImage extends Model
         'collection',
         'url',
         'alt_text',
+        'title',
+        'description',
         'sort_order',
         'is_active',
         'uploaded_by',
+        'event_id',
     ];
 
     /**
@@ -40,5 +43,13 @@ class GalleryImage extends Model
     public function uploader(): BelongsTo
     {
         return $this->belongsTo(User::class, 'uploaded_by');
+    }
+
+    /**
+     * Event this image belongs to when uploaded as an event photo.
+     */
+    public function event(): BelongsTo
+    {
+        return $this->belongsTo(Event::class);
     }
 }

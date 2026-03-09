@@ -48,11 +48,11 @@ const packageOptions = [
 ];
 
 const serviceOptions = [
-    'Face Painting',
-    'Glitter Tattoos',
-    'Festival Bling',
-    'Themed Character Looks',
-    'Waterproof Festival Designs',
+    'Face Painting for parties, events, and festivals',
+    'Baby bump painting and body painting',
+    'Glitter tattoos',
+    'Mermaid hair extensions',
+    'Handmade, skin-safe 3D face bling',
 ];
 
 const addOnOptions = [
@@ -127,7 +127,6 @@ const allTimes = [
 const formSectionRef = ref(null);
 const loading = ref(false);
 const message = ref('');
-const success = ref(false);
 const quoteStartTracked = ref(false);
 
 const form = ref({
@@ -254,7 +253,6 @@ function resetForm() {
 async function submitForm() {
     loading.value = true;
     message.value = '';
-    success.value = false;
 
     trackQuoteStartIfNeeded();
 
@@ -311,10 +309,11 @@ async function submitForm() {
         const data = await response.json();
 
         if (response.ok) {
-            success.value = true;
-            message.value = data.message || 'Thank you! Your quote has been submitted.';
             trackCustomTrackingEvent('quote_funnel_submitted');
             resetForm();
+            window.location.assign(data.redirect_url || '/quote/overview');
+
+            return;
         } else {
             message.value = data.error || data.message || 'Something went wrong. Please try again.';
         }
@@ -631,8 +630,7 @@ async function submitForm() {
 
                     <p
                         v-if="message"
-                        class="mt-4 font-semibold"
-                        :class="success ? 'text-emerald-200' : 'text-rose-200'"
+                        class="mt-4 font-semibold text-rose-200"
                     >
                         {{ message }}
                     </p>

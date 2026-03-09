@@ -46,6 +46,9 @@ class QuoteManagementController extends Controller
                 'calc_base_amount',
                 'calc_setup_amount',
                 'calc_travel_amount',
+                'calc_discount_name',
+                'calc_discount_description',
+                'calc_discount_amount',
                 'calc_subtotal',
                 'calc_gst_amount',
                 'calc_total_amount',
@@ -547,6 +550,9 @@ class QuoteManagementController extends Controller
             'calc_base_amount' => ['nullable', 'numeric', 'min:0'],
             'calc_setup_amount' => ['nullable', 'numeric', 'min:0'],
             'calc_travel_amount' => ['nullable', 'numeric', 'min:0'],
+            'calc_discount_name' => ['nullable', 'string', 'max:120'],
+            'calc_discount_description' => ['nullable', 'string', 'max:255'],
+            'calc_discount_amount' => ['nullable', 'numeric', 'min:0'],
             'calc_subtotal' => ['nullable', 'numeric', 'min:0'],
             'calc_gst_amount' => ['nullable', 'numeric', 'min:0'],
             'calc_total_amount' => ['nullable', 'numeric', 'min:0'],
@@ -584,6 +590,9 @@ class QuoteManagementController extends Controller
             'calc_base_amount' => $this->nullableFloat($validated, 'calc_base_amount'),
             'calc_setup_amount' => $this->nullableFloat($validated, 'calc_setup_amount'),
             'calc_travel_amount' => $this->nullableFloat($validated, 'calc_travel_amount'),
+            'calc_discount_name' => $this->nullableTrimmedString($validated, 'calc_discount_name', 120),
+            'calc_discount_description' => $this->nullableTrimmedString($validated, 'calc_discount_description', 255),
+            'calc_discount_amount' => $this->nullableFloat($validated, 'calc_discount_amount'),
             'calc_subtotal' => $this->nullableFloat($validated, 'calc_subtotal'),
             'calc_gst_amount' => $this->nullableFloat($validated, 'calc_gst_amount'),
             'calc_total_amount' => $this->nullableFloat($validated, 'calc_total_amount'),
@@ -610,7 +619,7 @@ class QuoteManagementController extends Controller
         if (! empty($validated['start_time']) && ! empty($validated['end_time'])) {
             $start = Carbon::createFromFormat('H:i', $validated['start_time']);
             $end = Carbon::createFromFormat('H:i', $validated['end_time']);
-            $minutes = $end->diffInMinutes($start, false);
+            $minutes = $start->diffInMinutes($end, false);
 
             if ($minutes > 0) {
                 return round($minutes / 60, 2);
@@ -725,8 +734,6 @@ class QuoteManagementController extends Controller
         $guestCount = $quote->guest_count !== null ? (string) $quote->guest_count : 'To be confirmed';
         $packageName = $quote->package_name ?: 'To be confirmed';
         $servicesRequested = $this->formatServices($quote->services_requested);
-        $addOnSummary = $this->formatAddOnSummary($quote->services_requested);
-        $addOnTotal = $this->addOnTotalFromServices($quote->services_requested);
         $travelArea = $quote->travel_area ?: 'To be confirmed';
         $venueType = $this->formatVenueType($quote->venue_type);
         $heardAbout = $quote->heard_about ?: 'To be confirmed';
@@ -737,17 +744,7 @@ class QuoteManagementController extends Controller
         $openTrackingUrl = $actionUrls['open'] ?? null;
         $termsUrl = rtrim((string) config('app.url', ''), '/').'/terms-and-conditions';
 
-        $calculationRows = implode('', array_filter([
-            $this->quoteEmailRow('Payment Type', $this->paymentTypeLabel($quote->calc_payment_type)),
-            $this->quoteEmailRow('Base', $this->formatCurrency($quote->calc_base_amount)),
-            $addOnSummary !== null ? $this->quoteEmailRow('Add-ons', e($addOnSummary)) : null,
-            $addOnTotal !== null ? $this->quoteEmailRow('Add-on Total', $this->formatCurrency($addOnTotal)) : null,
-            $this->quoteEmailRow('Setup', $this->formatCurrency($quote->calc_setup_amount)),
-            $this->quoteEmailRow('Travel', $this->formatCurrency($quote->calc_travel_amount)),
-            $this->quoteEmailRow('Subtotal', $this->formatCurrency($quote->calc_subtotal)),
-            $this->shouldShowGst($quote->calc_gst_amount) ? $this->quoteEmailRow('GST', $this->formatCurrency($quote->calc_gst_amount)) : null,
-            $this->quoteEmailRow('Total', '<strong>'.$this->formatCurrency($quote->calc_total_amount).'</strong>'),
-        ]));
+        $calculationRows = $this->quoteCalculationEmailRows($quote);
 
         return '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#eaf7ff;font-family:Quicksand,Arial,sans-serif;color:#0f172a;">'
             .'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:radial-gradient(circle at top,#bfdbfe 0%,#ccfbf1 45%,#f0f9ff 100%);padding:30px 12px;"><tr><td align="center">'
@@ -819,8 +816,6 @@ class QuoteManagementController extends Controller
         $guestCount = $quote->guest_count !== null ? (string) $quote->guest_count : 'To be confirmed';
         $packageName = $quote->package_name ?: 'To be confirmed';
         $servicesRequested = $this->formatServices($quote->services_requested);
-        $addOnSummary = $this->formatAddOnSummary($quote->services_requested);
-        $addOnTotal = $this->addOnTotalFromServices($quote->services_requested);
         $travelArea = $quote->travel_area ?: 'To be confirmed';
         $venueType = $this->formatVenueType($quote->venue_type);
         $heardAbout = $quote->heard_about ?: 'To be confirmed';
@@ -860,15 +855,7 @@ class QuoteManagementController extends Controller
             '',
             'Quote Breakdown',
             '---------------',
-            'Payment Type: '.$this->paymentTypeLabel($quote->calc_payment_type),
-            'Base: '.$this->formatCurrency($quote->calc_base_amount),
-            $addOnSummary !== null ? 'Add-ons: '.$addOnSummary : null,
-            $addOnTotal !== null ? 'Add-on Total: '.$this->formatCurrency($addOnTotal) : null,
-            'Setup: '.$this->formatCurrency($quote->calc_setup_amount),
-            'Travel: '.$this->formatCurrency($quote->calc_travel_amount),
-            'Subtotal: '.$this->formatCurrency($quote->calc_subtotal),
-            $this->shouldShowGst($quote->calc_gst_amount) ? 'GST: '.$this->formatCurrency($quote->calc_gst_amount) : null,
-            'Total: '.$this->formatCurrency($quote->calc_total_amount),
+            ...$this->quoteCalculationTextLines($quote),
             '',
             'Ready to confirm?',
         ], static fn (mixed $line): bool => $line !== null));
@@ -898,9 +885,6 @@ class QuoteManagementController extends Controller
         $logoUrl = rtrim((string) config('app.url', ''), '/').'/images/logo.png';
         $adminQuoteUrl = rtrim((string) config('app.url', ''), '/').'/admin/quotes';
         $confirmedAt = optional($quote->client_confirmed_at)->format('Y-m-d H:i:s') ?: now()->format('Y-m-d H:i:s');
-        $addOnSummary = $this->formatAddOnSummary($quote->services_requested);
-        $addOnTotal = $this->addOnTotalFromServices($quote->services_requested);
-
         $snapshotRows = implode('', array_filter([
             $this->quoteEmailRow('Name', e($quote->name ?: '—')),
             $this->quoteEmailRow('Email', e($quote->email ?: '—')),
@@ -919,17 +903,7 @@ class QuoteManagementController extends Controller
             $this->quoteEmailRow('Confirmed At', e($confirmedAt)),
         ]));
 
-        $calculationRows = implode('', array_filter([
-            $this->quoteEmailRow('Payment Type', $this->paymentTypeLabel($quote->calc_payment_type)),
-            $this->quoteEmailRow('Base', $this->formatCurrency($quote->calc_base_amount)),
-            $addOnSummary !== null ? $this->quoteEmailRow('Add-ons', e($addOnSummary)) : null,
-            $addOnTotal !== null ? $this->quoteEmailRow('Add-on Total', $this->formatCurrency($addOnTotal)) : null,
-            $this->quoteEmailRow('Setup', $this->formatCurrency($quote->calc_setup_amount)),
-            $this->quoteEmailRow('Travel', $this->formatCurrency($quote->calc_travel_amount)),
-            $this->quoteEmailRow('Subtotal', $this->formatCurrency($quote->calc_subtotal)),
-            $this->shouldShowGst($quote->calc_gst_amount) ? $this->quoteEmailRow('GST', $this->formatCurrency($quote->calc_gst_amount)) : null,
-            $this->quoteEmailRow('Total', '<strong>'.$this->formatCurrency($quote->calc_total_amount).'</strong>'),
-        ]));
+        $calculationRows = $this->quoteCalculationEmailRows($quote);
 
         return '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#eaf7ff;font-family:Quicksand,Arial,sans-serif;color:#0f172a;">'
             .'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:radial-gradient(circle at top,#bfdbfe 0%,#ccfbf1 45%,#f0f9ff 100%);padding:30px 12px;"><tr><td align="center">'
@@ -973,8 +947,6 @@ class QuoteManagementController extends Controller
     {
         $adminQuoteUrl = rtrim((string) config('app.url', ''), '/').'/admin/quotes';
         $confirmedAt = optional($quote->client_confirmed_at)->format('Y-m-d H:i:s') ?: now()->format('Y-m-d H:i:s');
-        $addOnSummary = $this->formatAddOnSummary($quote->services_requested);
-        $addOnTotal = $this->addOnTotalFromServices($quote->services_requested);
 
         return implode("\n", array_values(array_filter([
             'Quote Confirmed',
@@ -996,15 +968,7 @@ class QuoteManagementController extends Controller
             'Location: '.($quote->address ?: 'To be confirmed'),
             'Confirmed At: '.$confirmedAt,
             '',
-            'Payment Type: '.$this->paymentTypeLabel($quote->calc_payment_type),
-            'Base: '.$this->formatCurrency($quote->calc_base_amount),
-            $addOnSummary !== null ? 'Add-ons: '.$addOnSummary : null,
-            $addOnTotal !== null ? 'Add-on Total: '.$this->formatCurrency($addOnTotal) : null,
-            'Setup: '.$this->formatCurrency($quote->calc_setup_amount),
-            'Travel: '.$this->formatCurrency($quote->calc_travel_amount),
-            'Subtotal: '.$this->formatCurrency($quote->calc_subtotal),
-            $this->shouldShowGst($quote->calc_gst_amount) ? 'GST: '.$this->formatCurrency($quote->calc_gst_amount) : null,
-            'Total: '.$this->formatCurrency($quote->calc_total_amount),
+            ...$this->quoteCalculationTextLines($quote),
             '',
             'Open Admin Quotes: '.$adminQuoteUrl,
         ], static fn (mixed $line): bool => $line !== null)));
@@ -1018,9 +982,6 @@ class QuoteManagementController extends Controller
         $logoUrl = rtrim((string) config('app.url', ''), '/').'/images/logo.png';
         $contactEmail = (string) config('mail.from.address', '');
         $confirmedAt = optional($quote->client_confirmed_at)->format('Y-m-d H:i:s') ?: now()->format('Y-m-d H:i:s');
-        $addOnSummary = $this->formatAddOnSummary($quote->services_requested);
-        $addOnTotal = $this->addOnTotalFromServices($quote->services_requested);
-
         $snapshotRows = implode('', array_filter([
             $this->quoteEmailRow('Event Type', e($quote->event_type ?: 'your event')),
             $this->quoteEmailRow('Date', e($quote->event_date?->format('l, j F Y') ?: 'To be confirmed')),
@@ -1036,17 +997,7 @@ class QuoteManagementController extends Controller
             $this->quoteEmailRow('Confirmed At', e($confirmedAt)),
         ]));
 
-        $calculationRows = implode('', array_filter([
-            $this->quoteEmailRow('Payment Type', $this->paymentTypeLabel($quote->calc_payment_type)),
-            $this->quoteEmailRow('Base', $this->formatCurrency($quote->calc_base_amount)),
-            $addOnSummary !== null ? $this->quoteEmailRow('Add-ons', e($addOnSummary)) : null,
-            $addOnTotal !== null ? $this->quoteEmailRow('Add-on Total', $this->formatCurrency($addOnTotal)) : null,
-            $this->quoteEmailRow('Setup', $this->formatCurrency($quote->calc_setup_amount)),
-            $this->quoteEmailRow('Travel', $this->formatCurrency($quote->calc_travel_amount)),
-            $this->quoteEmailRow('Subtotal', $this->formatCurrency($quote->calc_subtotal)),
-            $this->shouldShowGst($quote->calc_gst_amount) ? $this->quoteEmailRow('GST', $this->formatCurrency($quote->calc_gst_amount)) : null,
-            $this->quoteEmailRow('Total', '<strong>'.$this->formatCurrency($quote->calc_total_amount).'</strong>'),
-        ]));
+        $calculationRows = $this->quoteCalculationEmailRows($quote);
 
         return '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#eaf7ff;font-family:Quicksand,Arial,sans-serif;color:#0f172a;">'
             .'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:radial-gradient(circle at top,#bfdbfe 0%,#ccfbf1 45%,#f0f9ff 100%);padding:30px 12px;"><tr><td align="center">'
@@ -1093,8 +1044,6 @@ class QuoteManagementController extends Controller
     {
         $contactEmail = (string) config('mail.from.address', '');
         $confirmedAt = optional($quote->client_confirmed_at)->format('Y-m-d H:i:s') ?: now()->format('Y-m-d H:i:s');
-        $addOnSummary = $this->formatAddOnSummary($quote->services_requested);
-        $addOnTotal = $this->addOnTotalFromServices($quote->services_requested);
 
         return implode("\n", array_values(array_filter([
             'Quote Confirmed',
@@ -1118,15 +1067,7 @@ class QuoteManagementController extends Controller
             'Location: '.($quote->address ?: 'To be confirmed'),
             'Confirmed At: '.$confirmedAt,
             '',
-            'Payment Type: '.$this->paymentTypeLabel($quote->calc_payment_type),
-            'Base: '.$this->formatCurrency($quote->calc_base_amount),
-            $addOnSummary !== null ? 'Add-ons: '.$addOnSummary : null,
-            $addOnTotal !== null ? 'Add-on Total: '.$this->formatCurrency($addOnTotal) : null,
-            'Setup: '.$this->formatCurrency($quote->calc_setup_amount),
-            'Travel: '.$this->formatCurrency($quote->calc_travel_amount),
-            'Subtotal: '.$this->formatCurrency($quote->calc_subtotal),
-            $this->shouldShowGst($quote->calc_gst_amount) ? 'GST: '.$this->formatCurrency($quote->calc_gst_amount) : null,
-            'Total: '.$this->formatCurrency($quote->calc_total_amount),
+            ...$this->quoteCalculationTextLines($quote),
             '',
             'We are excited to bring the sparkle to your event.',
             $contactEmail !== '' ? 'Questions? Contact us at: '.$contactEmail : null,
@@ -1555,6 +1496,84 @@ class QuoteManagementController extends Controller
         }
 
         return (float) $amounts->sum();
+    }
+
+    private function shouldShowDiscount(?float $discountAmount): bool
+    {
+        return $discountAmount !== null && $discountAmount > 0;
+    }
+
+    private function formatDiscountSummary(Quote $quote): ?string
+    {
+        $name = trim((string) ($quote->calc_discount_name ?? ''));
+        $description = trim((string) ($quote->calc_discount_description ?? ''));
+
+        if ($name === '' && $description === '') {
+            return null;
+        }
+
+        return collect([$name, $description])
+            ->filter(fn (string $value): bool => $value !== '')
+            ->implode(' - ');
+    }
+
+    private function formatNegativeCurrency(?float $amount): string
+    {
+        if ($amount === null) {
+            return 'To be confirmed';
+        }
+
+        return '-$'.number_format($amount, 2);
+    }
+
+    private function quoteCalculationEmailRows(Quote $quote): string
+    {
+        $addOnSummary = $this->formatAddOnSummary($quote->services_requested);
+        $addOnTotal = $this->addOnTotalFromServices($quote->services_requested);
+        $discountSummary = $this->formatDiscountSummary($quote);
+
+        return implode('', array_filter([
+            $this->quoteEmailRow('Payment Type', $this->paymentTypeLabel($quote->calc_payment_type)),
+            $this->quoteEmailRow('Base', $this->formatCurrency($quote->calc_base_amount)),
+            $addOnSummary !== null ? $this->quoteEmailRow('Add-ons', e($addOnSummary)) : null,
+            $addOnTotal !== null ? $this->quoteEmailRow('Add-on Total', $this->formatCurrency($addOnTotal)) : null,
+            $this->quoteEmailRow('Setup', $this->formatCurrency($quote->calc_setup_amount)),
+            $this->quoteEmailRow('Travel', $this->formatCurrency($quote->calc_travel_amount)),
+            $this->shouldShowDiscount($quote->calc_discount_amount)
+                ? $this->quoteEmailRow(
+                    'Discount',
+                    e($discountSummary ?: 'Discount').' ('.$this->formatNegativeCurrency($quote->calc_discount_amount).')',
+                )
+                : null,
+            $this->quoteEmailRow('Subtotal', $this->formatCurrency($quote->calc_subtotal)),
+            $this->shouldShowGst($quote->calc_gst_amount) ? $this->quoteEmailRow('GST', $this->formatCurrency($quote->calc_gst_amount)) : null,
+            $this->quoteEmailRow('Total', '<strong>'.$this->formatCurrency($quote->calc_total_amount).'</strong>'),
+        ]));
+    }
+
+    /**
+     * @return array<int, string|null>
+     */
+    private function quoteCalculationTextLines(Quote $quote): array
+    {
+        $addOnSummary = $this->formatAddOnSummary($quote->services_requested);
+        $addOnTotal = $this->addOnTotalFromServices($quote->services_requested);
+        $discountSummary = $this->formatDiscountSummary($quote);
+
+        return [
+            'Payment Type: '.$this->paymentTypeLabel($quote->calc_payment_type),
+            'Base: '.$this->formatCurrency($quote->calc_base_amount),
+            $addOnSummary !== null ? 'Add-ons: '.$addOnSummary : null,
+            $addOnTotal !== null ? 'Add-on Total: '.$this->formatCurrency($addOnTotal) : null,
+            'Setup: '.$this->formatCurrency($quote->calc_setup_amount),
+            'Travel: '.$this->formatCurrency($quote->calc_travel_amount),
+            $this->shouldShowDiscount($quote->calc_discount_amount)
+                ? 'Discount: '.($discountSummary ?: 'Discount').' ('.$this->formatNegativeCurrency($quote->calc_discount_amount).')'
+                : null,
+            'Subtotal: '.$this->formatCurrency($quote->calc_subtotal),
+            $this->shouldShowGst($quote->calc_gst_amount) ? 'GST: '.$this->formatCurrency($quote->calc_gst_amount) : null,
+            'Total: '.$this->formatCurrency($quote->calc_total_amount),
+        ];
     }
 
     private function shouldShowGst(?float $gstAmount): bool

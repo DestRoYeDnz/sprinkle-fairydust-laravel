@@ -20,7 +20,7 @@ class AdminSettingsController extends Controller
             ->first()?->value;
 
         return response()
-            ->json(CalculatorSettings::resolve($stored))
+            ->json(CalculatorSettings::normalize($stored ?? []))
             ->header('Cache-Control', 'no-cache');
     }
 
@@ -43,4 +43,3 @@ class AdminSettingsController extends Controller
         ]);
     }
 }
-

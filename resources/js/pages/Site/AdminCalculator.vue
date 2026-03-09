@@ -112,6 +112,10 @@ function defaultCalculatorSettings() {
             packageBaseAmount: defaultPackage.baseAmount,
             selectedAddOns: [],
             customAddOns: [],
+            includeDiscount: false,
+            discountName: 'Discount',
+            discountDescription: 'Saw my ad',
+            discountAmount: 20,
             includeSetup: false,
             setupRate: 60,
             setupHours: 2,
@@ -145,6 +149,9 @@ const result = ref({
     baseAmount: 0,
     addOnsLine: '',
     addOnsAmount: 0,
+    discountLine: '',
+    discountAmount: 0,
+    discountSummary: '',
     setupLine: '',
     setupAmount: 0,
     travelLine: '',
@@ -234,6 +241,10 @@ function normalizeCustomAddOns(value) {
         .slice(0, 20);
 }
 
+function normalizeDiscountLabel(value, maxLength = 120) {
+    return String(value ?? '').trim().slice(0, maxLength);
+}
+
 function selectedPackageOption() {
     const packageName = String(form.value.packageName ?? '').trim();
 
@@ -251,6 +262,29 @@ function resolvedAddOnItems() {
     const customItems = normalizeCustomAddOns(form.value.customAddOns);
 
     return [...selectedItems, ...customItems];
+}
+
+function resolvedDiscount() {
+    const includeDiscount = Boolean(form.value.includeDiscount);
+    const amount = Math.max(0, toNumber(form.value.discountAmount));
+
+    if (!includeDiscount || amount <= 0) {
+        return {
+            amount: 0,
+            summary: '',
+            line: '',
+        };
+    }
+
+    const name = normalizeDiscountLabel(form.value.discountName, 120);
+    const description = normalizeDiscountLabel(form.value.discountDescription, 255);
+    const summary = [name || 'Discount', description].filter(Boolean).join(' - ');
+
+    return {
+        amount,
+        summary,
+        line: `Discount: ${summary} = -$${amount.toFixed(2)}`,
+    };
 }
 
 function formatAddOnList(items) {
@@ -345,6 +379,10 @@ function normalizeCalculatorSettings(source) {
             packageBaseAmount: toNumber(payloadForm.packageBaseAmount ?? defaults.form.packageBaseAmount),
             selectedAddOns: normalizeAddOnSelection(payloadForm.selectedAddOns ?? defaults.form.selectedAddOns),
             customAddOns: normalizeCustomAddOns(payloadForm.customAddOns ?? defaults.form.customAddOns),
+            includeDiscount: Boolean(payloadForm.includeDiscount ?? defaults.form.includeDiscount),
+            discountName: normalizeDiscountLabel(payloadForm.discountName ?? defaults.form.discountName, 120),
+            discountDescription: defaults.form.discountDescription,
+            discountAmount: Math.max(0, toNumber(payloadForm.discountAmount ?? defaults.form.discountAmount)),
             includeSetup: Boolean(payloadForm.includeSetup ?? defaults.form.includeSetup),
             setupRate: toNumber(payloadForm.setupRate ?? defaults.form.setupRate),
             setupHours: toNumber(payloadForm.setupHours ?? defaults.form.setupHours),
@@ -420,6 +458,11 @@ function applyQueryParams() {
     const heardAbout = params.get('heard_about') ?? '';
     const address = params.get('address') ?? '';
     const notes = params.get('notes') ?? '';
+    const termsAccepted = params.get('terms_accepted') ?? '';
+    const includeDiscount = params.get('include_discount') ?? '';
+    const discountName = params.get('discount_name') ?? '';
+    const discountDescription = params.get('discount_description') ?? '';
+    const discountAmount = params.get('discount_amount') ?? '';
 
     if (quoteId) {
         sourceQuoteId.value = quoteId;
@@ -486,6 +529,26 @@ function applyQueryParams() {
         form.value.notes = notes;
     }
 
+    if (termsAccepted) {
+        form.value.termsAccepted = ['1', 'true', 'yes'].includes(termsAccepted.toLowerCase());
+    }
+
+    if (includeDiscount) {
+        form.value.includeDiscount = ['1', 'true', 'yes'].includes(includeDiscount.toLowerCase());
+    }
+
+    if (discountName) {
+        form.value.discountName = discountName;
+    }
+
+    if (discountDescription) {
+        form.value.discountDescription = discountDescription;
+    }
+
+    if (discountAmount) {
+        form.value.discountAmount = toNumber(discountAmount);
+    }
+
     if (event && !form.value.eventName) {
         form.value.eventName = event;
     }
@@ -549,6 +612,7 @@ function calculateTotal() {
     const setupRate = toNumber(form.value.setupRate);
     const setupHours = toNumber(form.value.setupHours);
     const setupTotal = form.value.includeSetup ? setupRate * setupHours : 0;
+    const discount = resolvedDiscount();
 
     const setupLine = form.value.includeSetup
         ? `Setup: ${setupHours} hours × $${setupRate.toFixed(2)} = $${setupTotal.toFixed(2)}`
@@ -570,7 +634,12 @@ function calculateTotal() {
     }
 
     const baseAmount = baseTotal + addOnTotal;
-    const subtotal = baseAmount + setupTotal + travelTotal;
+    const preDiscountSubtotal = baseAmount + setupTotal + travelTotal;
+    const discountAmount = Math.min(discount.amount, preDiscountSubtotal);
+    const discountLine = discountAmount > 0
+        ? `Discount: ${discount.summary} = -$${discountAmount.toFixed(2)}`
+        : '';
+    const subtotal = Math.max(0, preDiscountSubtotal - discountAmount);
     const gstAmount = form.value.includeGST ? subtotal * 0.15 : 0;
     const total = subtotal + gstAmount;
     const startDisplay = form.value.startTime || '—';
@@ -581,6 +650,9 @@ function calculateTotal() {
         baseAmount,
         addOnsLine: addOnLine,
         addOnsAmount: addOnTotal,
+        discountLine,
+        discountAmount,
+        discountSummary: discount.summary,
         setupLine,
         setupAmount: setupTotal,
         travelLine,
@@ -674,6 +746,10 @@ const quoteText = computed(() => {
 
     if (result.value.addOnsLine) {
         lines.push(result.value.addOnsLine);
+    }
+
+    if (result.value.discountLine) {
+        lines.push(result.value.discountLine);
     }
 
     if (result.value.setupLine) {
@@ -779,6 +855,11 @@ function quotePayload() {
         calc_base_amount: Number(result.value.baseAmount.toFixed(2)),
         calc_setup_amount: Number(result.value.setupAmount.toFixed(2)),
         calc_travel_amount: Number(result.value.travelAmount.toFixed(2)),
+        calc_discount_name: result.value.discountAmount > 0 ? normalizeDiscountLabel(form.value.discountName, 120) || 'Discount' : null,
+        calc_discount_description: result.value.discountAmount > 0
+            ? normalizeDiscountLabel(form.value.discountDescription, 255) || null
+            : null,
+        calc_discount_amount: result.value.discountAmount > 0 ? Number(result.value.discountAmount.toFixed(2)) : null,
         calc_subtotal: Number(result.value.subtotal.toFixed(2)),
         calc_gst_amount: form.value.includeGST ? Number(result.value.gstAmount.toFixed(2)) : null,
         calc_total_amount: Number(result.value.total.toFixed(2)),
@@ -1077,6 +1158,30 @@ onMounted(async () => {
 
                             <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                                 <label class="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
+                                    <input v-model="form.includeDiscount" type="checkbox" class="h-4 w-4 rounded border-slate-400" />
+                                    Apply Discount
+                                </label>
+
+                                <div v-if="form.includeDiscount" class="grid gap-4 md:grid-cols-2">
+                                    <label class="field-label">Discount Name
+                                        <input v-model="form.discountName" type="text" class="input" placeholder="Discount" />
+                                    </label>
+                                    <label class="field-label">Discount Amount ($)
+                                        <input v-model="form.discountAmount" type="number" min="0" step="0.01" class="input" />
+                                    </label>
+                                    <label class="field-label md:col-span-2">Discount Description
+                                        <input
+                                            v-model="form.discountDescription"
+                                            type="text"
+                                            class="input"
+                                            placeholder="Reason for discount"
+                                        />
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                                <label class="mb-3 inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
                                     <input v-model="form.includeSetup" type="checkbox" class="h-4 w-4 rounded border-slate-400" />
                                     Include Setup / Preparation Time
                                 </label>
@@ -1164,6 +1269,10 @@ onMounted(async () => {
                             <p class="mt-1"><strong>Package:</strong> {{ form.packageName || '—' }}</p>
                             <p class="mt-1"><strong>Services:</strong> {{ form.servicesRequested || '—' }}</p>
                             <p class="mt-1"><strong>Add-ons:</strong> {{ selectedAddOnSummary || '—' }}</p>
+                            <p class="mt-1">
+                                <strong>Discount:</strong>
+                                {{ result.discountAmount > 0 ? `${result.discountSummary} (-$${result.discountAmount.toFixed(2)})` : '—' }}
+                            </p>
                             <p class="mt-1"><strong>Travel Area:</strong> {{ form.travelArea || '—' }}</p>
                             <p class="mt-1"><strong>Venue Type:</strong> {{ form.venueType || '—' }}</p>
                             <p class="mt-1"><strong>Heard About Us:</strong> {{ form.heardAbout || '—' }}</p>
@@ -1172,6 +1281,7 @@ onMounted(async () => {
                             <p class="mt-1"><strong>Terms Accepted:</strong> {{ form.termsAccepted ? 'Yes' : 'No' }}</p>
                             <p><strong>Base:</strong> {{ result.baseLine }}</p>
                             <p v-if="result.addOnsLine" class="mt-1"><strong>Add-ons:</strong> {{ result.addOnsLine }}</p>
+                            <p v-if="result.discountLine" class="mt-1"><strong>Discount:</strong> {{ result.discountLine }}</p>
                             <p v-if="result.setupLine" class="mt-1"><strong>Setup:</strong> {{ result.setupLine }}</p>
                             <p class="mt-1"><strong>Travel:</strong> {{ result.travelLine }}</p>
                             <p class="mt-1"><strong>Subtotal:</strong> ${{ result.subtotal.toFixed(2) }}</p>

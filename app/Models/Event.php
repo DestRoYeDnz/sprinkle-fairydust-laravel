@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Event extends Model
 {
@@ -17,6 +18,7 @@ class Event extends Model
     protected $fillable = [
         'name',
         'type',
+        'visibility',
         'address',
         'date',
         'start_time',
@@ -33,4 +35,15 @@ class Event extends Model
     protected $casts = [
         'date' => 'date',
     ];
+
+    /**
+     * Extra gallery photos attached to this event.
+     */
+    public function photos(): HasMany
+    {
+        return $this->hasMany(GalleryImage::class)
+            ->where('collection', 'events')
+            ->orderBy('sort_order')
+            ->orderByDesc('id');
+    }
 }

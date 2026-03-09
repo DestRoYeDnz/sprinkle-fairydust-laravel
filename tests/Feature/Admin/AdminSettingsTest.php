@@ -15,6 +15,30 @@ it('returns calculator settings defaults for admin users', function () {
     $response->assertJsonPath('artist.name', 'Melody');
     $response->assertJsonPath('form.paymentType', 'hourly');
     $response->assertJsonPath('form.rate', 120);
+    $response->assertJsonPath('form.includeDiscount', false);
+    $response->assertJsonPath('form.discountName', 'Discount');
+    $response->assertJsonPath('form.discountDescription', '');
+    $response->assertJsonPath('form.discountAmount', 20);
+});
+
+it('keeps the saved discount description blank when no default is configured', function () {
+    $admin = User::factory()->create([
+        'is_admin' => true,
+    ]);
+
+    AdminSetting::query()->create([
+        'key' => CalculatorSettings::KEY,
+        'value' => [
+            'form' => [
+                'discountDescription' => '',
+            ],
+        ],
+    ]);
+
+    $this->actingAs($admin)
+        ->getJson(route('admin.settings.calculator.show'))
+        ->assertOk()
+        ->assertJsonPath('form.discountDescription', '');
 });
 
 it('allows admin users to update calculator settings', function () {
@@ -48,6 +72,9 @@ it('allows admin users to update calculator settings', function () {
             'customAddOns' => [
                 ['name' => 'Extra Artist', 'amount' => 120],
             ],
+            'includeDiscount' => true,
+            'discountName' => 'School Fair Discount',
+            'discountAmount' => 20,
             'includeSetup' => true,
             'setupRate' => 65,
             'setupHours' => 1.5,
@@ -71,6 +98,9 @@ it('allows admin users to update calculator settings', function () {
     $response->assertJsonPath('settings.form.paymentType', 'package');
     $response->assertJsonPath('settings.form.packageBaseAmount', 390);
     $response->assertJsonPath('settings.form.includeGST', false);
+    $response->assertJsonPath('settings.form.includeDiscount', true);
+    $response->assertJsonPath('settings.form.discountName', 'School Fair Discount');
+    $response->assertJsonPath('settings.form.discountAmount', 20);
 
     $setting = AdminSetting::query()
         ->where('key', CalculatorSettings::KEY)
@@ -81,6 +111,10 @@ it('allows admin users to update calculator settings', function () {
     expect(data_get($setting?->value, 'form.travelType'))->toBe('flat');
     expect(data_get($setting?->value, 'form.paymentType'))->toBe('package');
     expect(data_get($setting?->value, 'form.flatTravel'))->toBe(40);
+    expect(data_get($setting?->value, 'form.includeDiscount'))->toBeTrue();
+    expect(data_get($setting?->value, 'form.discountName'))->toBe('School Fair Discount');
+    expect(data_get($setting?->value, 'form.discountDescription'))->toBe('');
+    expect((float) data_get($setting?->value, 'form.discountAmount'))->toBe(20.0);
 });
 
 it('forbids non-admin users from calculator settings endpoints', function () {

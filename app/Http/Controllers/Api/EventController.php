@@ -3,58 +3,86 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreEventRequest;
 use App\Models\Event;
+use App\Models\GalleryImage;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class EventController extends Controller
 {
     /**
-     * Return all events in chronological order.
+     * Return public events in chronological order.
      */
     public function index(): JsonResponse
     {
-        $events = Event::query()
-            ->select([
-                'id',
-                'name',
-                'type',
-                'address',
-                'date',
-                'start_time',
-                'end_time',
-                'description',
-                'image_url',
-            ])
-            ->orderBy('date')
-            ->orderBy('start_time')
-            ->get();
+        return $this->eventResponse(
+            Event::query()->where('visibility', 'public'),
+        );
+    }
 
-        return response()->json($events)->header('Cache-Control', 'no-cache');
+    /**
+     * Return public and private events for the admin area.
+     */
+    public function adminIndex(): JsonResponse
+    {
+        return $this->eventResponse(Event::query());
     }
 
     /**
      * Store a new event from the admin form.
      */
-    public function store(Request $request): JsonResponse
+    public function store(StoreEventRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => ['nullable', 'string', 'max:255'],
-            'type' => ['required', 'string', 'max:100'],
-            'address' => ['nullable', 'string', 'max:255'],
-            'date' => ['required', 'date'],
-            'start_time' => ['nullable', 'date_format:H:i'],
-            'end_time' => ['nullable', 'date_format:H:i', 'after:start_time'],
-            'description' => ['nullable', 'string'],
-            'image_url' => ['nullable', 'string', 'max:2048'],
-        ]);
-
-        if (($validated['type'] ?? null) === 'Private') {
-            $validated['address'] = null;
-        }
-
-        Event::query()->create($validated);
+        Event::query()->create($request->validated());
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Build the event response payload.
+     */
+    protected function eventResponse(Builder $query): JsonResponse
+    {
+        $events = $query
+            ->select(['id', 'name', 'type', 'visibility', 'address', 'date', 'start_time', 'end_time', 'description', 'image_url'])
+            ->with([
+                'photos' => fn ($photoQuery) => $photoQuery->select([
+                    'id',
+                    'event_id',
+                    'url',
+                    'alt_text',
+                    'sort_order',
+                    'collection',
+                ]),
+            ])
+            ->orderBy('date')
+            ->orderBy('start_time')
+            ->get()
+            ->map(function (Event $event): array {
+                return [
+                    'id' => $event->id,
+                    'name' => $event->name,
+                    'type' => $event->type,
+                    'visibility' => $event->visibility,
+                    'address' => $event->address,
+                    'date' => $event->date?->toDateString(),
+                    'start_time' => $event->start_time,
+                    'end_time' => $event->end_time,
+                    'description' => $event->description,
+                    'image_url' => $event->image_url,
+                    'photos' => $event->photos->map(fn (GalleryImage $photo): array => [
+                        'id' => $photo->id,
+                        'event_id' => $photo->event_id,
+                        'url' => $photo->url,
+                        'alt_text' => $photo->alt_text,
+                        'sort_order' => $photo->sort_order,
+                        'collection' => $photo->collection,
+                    ])->values()->all(),
+                ];
+            })
+            ->values();
+
+        return response()->json($events)->header('Cache-Control', 'no-cache');
     }
 }

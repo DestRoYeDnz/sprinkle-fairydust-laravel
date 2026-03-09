@@ -15,6 +15,8 @@ const imageUrl = ref('');
 const uploadError = ref('');
 const uploading = ref(false);
 const collection = ref('gallery');
+const title = ref('');
+const description = ref('');
 const altText = ref('');
 const showMissingFileDialog = ref(false);
 
@@ -36,6 +38,14 @@ async function uploadImage() {
         formData.append('file', file.value);
         formData.append('collection', collection.value);
 
+        if (title.value.trim()) {
+            formData.append('title', title.value.trim());
+        }
+
+        if (description.value.trim()) {
+            formData.append('description', description.value.trim());
+        }
+
         if (altText.value.trim()) {
             formData.append('alt_text', altText.value.trim());
         }
@@ -55,6 +65,8 @@ async function uploadImage() {
         }
 
         imageUrl.value = data.url;
+        title.value = '';
+        description.value = '';
         altText.value = '';
         file.value = null;
     } catch {
@@ -83,6 +95,38 @@ async function uploadImage() {
                             <option value="gallery">Gallery</option>
                             <option value="designs">Designs</option>
                         </select>
+                    </div>
+
+                    <div>
+                        <label for="image-title" class="mb-1 block text-sm font-semibold text-slate-800">
+                            Lightbox Title <span v-if="collection === 'gallery'">(required)</span>
+                        </label>
+                        <input
+                            id="image-title"
+                            v-model="title"
+                            type="text"
+                            class="input"
+                            maxlength="255"
+                            :required="collection === 'gallery'"
+                            placeholder="Title shown in the gallery lightbox"
+                        />
+                        <p class="mt-1 text-xs text-slate-500">
+                            Shown as overlay text in the gallery lightbox for uploaded gallery images.
+                        </p>
+                    </div>
+
+                    <div>
+                        <label for="image-description" class="mb-1 block text-sm font-semibold text-slate-800">
+                            Description (optional)
+                        </label>
+                        <textarea
+                            id="image-description"
+                            v-model="description"
+                            class="input"
+                            rows="3"
+                            maxlength="2000"
+                            placeholder="Optional extra detail for the lightbox overlay"
+                        ></textarea>
                     </div>
 
                     <div>

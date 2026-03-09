@@ -35,9 +35,12 @@ it('allows admin users to manage quotes', function () {
             'calc_base_amount' => 360,
             'calc_setup_amount' => 60,
             'calc_travel_amount' => 25,
-            'calc_subtotal' => 445,
-            'calc_gst_amount' => 66.75,
-            'calc_total_amount' => 511.75,
+            'calc_discount_name' => 'Loyalty Discount',
+            'calc_discount_description' => 'Returning client thank-you',
+            'calc_discount_amount' => 20,
+            'calc_subtotal' => 425,
+            'calc_gst_amount' => 63.75,
+            'calc_total_amount' => 488.75,
         ]);
 
     $createResponse->assertOk()->assertJsonPath('success', true);
@@ -53,6 +56,10 @@ it('allows admin users to manage quotes', function () {
         'package_name' => 'Classic Birthday Magic',
         'anonymous_id' => 'anon_admin_quote_1',
     ]);
+
+    $createdQuote = Quote::query()->findOrFail($quoteId);
+
+    expect((float) $createdQuote->total_hours)->toBe(3.0);
 
     $this->actingAs($admin)
         ->getJson(route('admin.quotes.index'))
@@ -82,9 +89,12 @@ it('allows admin users to manage quotes', function () {
             'calc_base_amount' => 500,
             'calc_setup_amount' => 0,
             'calc_travel_amount' => 40,
-            'calc_subtotal' => 540,
-            'calc_gst_amount' => 81,
-            'calc_total_amount' => 621,
+            'calc_discount_name' => 'Festival Support Discount',
+            'calc_discount_description' => 'Community event rate',
+            'calc_discount_amount' => 20,
+            'calc_subtotal' => 520,
+            'calc_gst_amount' => 78,
+            'calc_total_amount' => 598,
         ]);
 
     $updateResponse->assertOk()->assertJsonPath('success', true);
@@ -97,7 +107,9 @@ it('allows admin users to manage quotes', function () {
         'package_name' => 'Festival Crowd Package',
         'address' => '88 Updated Avenue',
         'calc_payment_type' => 'package',
-        'calc_total_amount' => 621,
+        'calc_discount_name' => 'Festival Support Discount',
+        'calc_discount_amount' => 20,
+        'calc_total_amount' => 598,
     ]);
 
     config([
@@ -139,7 +151,10 @@ it('allows admin users to manage quotes', function () {
             && str_contains($mail->mailSubject, 'Sprinkle Fairydust Quote')
             && str_contains($mail->htmlContent, 'Sprinkle Fairydust Quote')
             && str_contains($mail->htmlContent, 'Guest Count')
-            && str_contains($mail->htmlContent, 'Package');
+            && str_contains($mail->htmlContent, 'Package')
+            && str_contains($mail->htmlContent, 'Festival Support Discount')
+            && str_contains($mail->htmlContent, '-$20.00')
+            && str_contains((string) $mail->textContent, 'Discount: Festival Support Discount - Community event rate (-$20.00)');
     });
 
     $this->assertDatabaseHas('quotes', [

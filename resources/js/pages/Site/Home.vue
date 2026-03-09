@@ -14,8 +14,8 @@ const props = defineProps({
 });
 
 const trustStats = [
-    { label: 'Events painted', value: '350+' },
-    { label: 'Repeat bookings', value: '120+' },
+    { label: 'Events painted', value: '150+' },
+    { label: 'Repeat bookings', value: '50+' },
     { label: 'Typical response time', value: '< 24h' },
     { label: 'Service area', value: 'South Auckland and Northern Waikato' },
 ];
@@ -26,8 +26,8 @@ const whatWeDo = [
         description: 'Face painting for parties, events, and festivals.',
     },
     {
-        title: 'Baby Bump Painting',
-        description: 'Beautiful baby bump painting and creative body art for special occasions.',
+        title: 'Baby Bump and Body Painting',
+        description: 'Beautiful baby bump and body painting for special occasions, photoshoots, and creative event moments.',
     },
     {
         title: 'Glitter Tattoos',

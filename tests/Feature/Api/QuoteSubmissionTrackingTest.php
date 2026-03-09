@@ -29,7 +29,8 @@ it('stores the anonymous tracking id when submitting a quote request', function 
         'details' => 'Please focus on glitter designs',
         'terms_accepted' => true,
     ])->assertOk()
-        ->assertJsonPath('success', true);
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('redirect_url', route('quote.overview'));
 
     $quote = Quote::query()->firstOrFail();
 
@@ -44,8 +45,35 @@ it('stores the anonymous tracking id when submitting a quote request', function 
     Mail::assertSent(StyledHtmlMail::class, function (StyledHtmlMail $mail): bool {
         return $mail->hasTo('admin@sprinkle.test')
             && str_contains($mail->htmlContent, 'Sprinkle Fairydust Face Painting')
-            && str_contains($mail->htmlContent, 'Open Quote Calculator');
+            && str_contains($mail->htmlContent, 'Open Quote Calculator')
+            && str_contains($mail->htmlContent, 'terms_accepted=1');
     });
+});
+
+it('accepts valid start and end times and calculates total hours', function () {
+    config([
+        'services.sprinkle.quote_notification_email' => 'admin@sprinkle.test',
+    ]);
+
+    Mail::fake();
+
+    $this->postJson('/api/quotes', [
+        'name' => 'Timed Client',
+        'email' => 'timed@example.com',
+        'event' => 'Birthday',
+        'date' => now()->toDateString(),
+        'start_time' => '10:00',
+        'end_time' => '13:00',
+        'terms_accepted' => true,
+    ])->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('redirect_url', route('quote.overview'));
+
+    $quote = Quote::query()->firstOrFail();
+
+    expect((float) $quote->total_hours)->toBe(3.0)
+        ->and((string) $quote->start_time)->toStartWith('10:00')
+        ->and((string) $quote->end_time)->toStartWith('13:00');
 });
 
 it('allows quote submissions without an anonymous tracking id', function () {
@@ -62,7 +90,8 @@ it('allows quote submissions without an anonymous tracking id', function () {
         'date' => now()->toDateString(),
         'terms_accepted' => true,
     ])->assertOk()
-        ->assertJsonPath('success', true);
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('redirect_url', route('quote.overview'));
 
     $quote = Quote::query()->firstOrFail();
 
@@ -95,7 +124,8 @@ it('stores larger combined services and add-ons lists for quote submissions', fu
         'services_requested' => $servicesRequested,
         'terms_accepted' => true,
     ])->assertOk()
-        ->assertJsonPath('success', true);
+        ->assertJsonPath('success', true)
+        ->assertJsonPath('redirect_url', route('quote.overview'));
 
     $quote = Quote::query()->firstOrFail();
 

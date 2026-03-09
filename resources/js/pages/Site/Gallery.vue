@@ -33,7 +33,13 @@ const fallbackImages = [
     'https://res.cloudinary.com/df2fgdx9y/image/upload/v1765706425/P_20251213_162357_k2alfg.jpg',
     'https://res.cloudinary.com/df2fgdx9y/image/upload/v1765706426/P_20251213_111401_j1aswb.jpg',
     'https://res.cloudinary.com/df2fgdx9y/image/upload/v1765706425/P_20251213_113103_kmrell.jpg',
-];
+].map((url, index) => ({
+    id: `fallback-${index}`,
+    url,
+    alt_text: 'Sprinkle Fairydust gallery image',
+    title: 'Sprinkle Fairydust Gallery',
+    description: '',
+}));
 
 const apiImages = ref([]);
 const lightboxIndex = ref(-1);
@@ -42,6 +48,142 @@ const images = computed(() => (apiImages.value.length ? apiImages.value : fallba
 const currentImage = computed(() =>
     lightboxIndex.value >= 0 ? images.value[lightboxIndex.value] : null,
 );
+
+function normalizeImage(imageRecord, index) {
+    if (typeof imageRecord === 'string') {
+        return {
+            id: `fallback-${index}`,
+            url: imageRecord,
+            alt_text: 'Sprinkle Fairydust gallery image',
+            title: 'Sprinkle Fairydust Gallery',
+            description: '',
+            event: null,
+        };
+    }
+
+    return {
+        id: imageRecord?.id ?? `gallery-image-${index}`,
+        url: imageRecord?.url ?? '',
+        alt_text: imageRecord?.alt_text || imageRecord?.title || 'Sprinkle Fairydust gallery image',
+        title: imageRecord?.title || imageRecord?.alt_text || 'Sprinkle Fairydust Gallery',
+        description: imageRecord?.description || '',
+        event: imageRecord?.event
+            ? {
+                id: imageRecord.event.id,
+                name: imageRecord.event.name || '',
+                type: imageRecord.event.type || '',
+                address: imageRecord.event.address || '',
+                date: imageRecord.event.date || '',
+                start_time: imageRecord.event.start_time || '',
+                end_time: imageRecord.event.end_time || '',
+                description: imageRecord.event.description || '',
+            }
+            : null,
+    };
+}
+
+function parseLocalDate(dateString) {
+    if (typeof dateString !== 'string' || dateString.length === 0) {
+        return null;
+    }
+
+    const [year, month, day] = dateString.split('-').map((value) => Number.parseInt(value, 10));
+
+    return new Date(year, (month || 1) - 1, day || 1);
+}
+
+function formatDate(dateString) {
+    const date = parseLocalDate(dateString);
+
+    if (!date) {
+        return '';
+    }
+
+    return date.toLocaleDateString('en-NZ', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+    });
+}
+
+function formatTime(time) {
+    if (!time) {
+        return '';
+    }
+
+    const normal = String(time).slice(0, 5);
+    const date = new Date(`1970-01-01T${normal}:00`);
+
+    return date.toLocaleTimeString('en-NZ', {
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
+
+function isEventImage(imageRecord) {
+    return Boolean(imageRecord?.event);
+}
+
+function getImageEyebrow(imageRecord) {
+    return isEventImage(imageRecord) ? 'Event Highlight' : 'Gallery Image';
+}
+
+function getImageTitle(imageRecord) {
+    if (isEventImage(imageRecord)) {
+        return imageRecord.event.name || `${imageRecord.event.type} Event`;
+    }
+
+    return imageRecord?.title || 'Sprinkle Fairydust Gallery';
+}
+
+function getImageDescription(imageRecord) {
+    if (isEventImage(imageRecord)) {
+        return imageRecord?.event?.description || '';
+    }
+
+    return imageRecord?.description || '';
+}
+
+function getImageAltText(imageRecord) {
+    return imageRecord?.alt_text || getImageTitle(imageRecord);
+}
+
+function getImageKey(imageRecord, index) {
+    return imageRecord?.id ?? imageRecord?.url ?? index;
+}
+
+function getImageMeta(imageRecord) {
+    if (!isEventImage(imageRecord)) {
+        return '';
+    }
+
+    const parts = [];
+
+    if (imageRecord.event.type) {
+        parts.push(imageRecord.event.type);
+    }
+
+    if (imageRecord.event.date) {
+        parts.push(formatDate(imageRecord.event.date));
+    }
+
+    if (imageRecord.event.start_time) {
+        let timeLabel = formatTime(imageRecord.event.start_time);
+
+        if (imageRecord.event.end_time) {
+            timeLabel = `${timeLabel} - ${formatTime(imageRecord.event.end_time)}`;
+        }
+
+        parts.push(timeLabel);
+    }
+
+    if (imageRecord.event.address) {
+        parts.push(imageRecord.event.address);
+    }
+
+    return parts.filter((value) => value && value.length > 0).join(' · ');
+}
 
 function openLightbox(index) {
     lightboxIndex.value = index;
@@ -74,8 +216,8 @@ async function loadImages() {
 
         if (Array.isArray(data) && data.length) {
             apiImages.value = data
-                .map((item) => item?.url)
-                .filter((url) => typeof url === 'string' && url.length > 0);
+                .map(normalizeImage)
+                .filter((imageRecord) => typeof imageRecord.url === 'string' && imageRecord.url.length > 0);
         }
     } catch {
         apiImages.value = [];
@@ -125,9 +267,9 @@ onMounted(() => {
             <div class="gallery-grid">
                 <img
                     v-for="(image, index) in images"
-                    :key="image"
-                    :src="image"
-                    alt="Sprinkle Fairydust Facepainting"
+                    :key="getImageKey(image, index)"
+                    :src="image.url"
+                    :alt="getImageAltText(image)"
                     class="gallery-item"
                     @click="openLightbox(index)"
                 />
@@ -137,7 +279,19 @@ onMounted(() => {
 
     <div class="lightbox" :class="{ active: currentImage }" @click.self="closeLightbox">
         <span class="lightbox-close" @click="closeLightbox">×</span>
-        <img v-if="currentImage" class="lightbox-image" :src="currentImage" alt="Large View" />
+        <div v-if="currentImage" class="lightbox-stage">
+            <img class="lightbox-image" :src="currentImage.url" :alt="getImageAltText(currentImage)" />
+            <div class="lightbox-overlay">
+                <p class="lightbox-eyebrow">{{ getImageEyebrow(currentImage) }}</p>
+                <p class="lightbox-title">{{ getImageTitle(currentImage) }}</p>
+                <p v-if="getImageMeta(currentImage)" class="lightbox-meta">
+                    {{ getImageMeta(currentImage) }}
+                </p>
+                <p v-if="getImageDescription(currentImage)" class="lightbox-description">
+                    {{ getImageDescription(currentImage) }}
+                </p>
+            </div>
+        </div>
         <div class="lightbox-controls">
             <span class="lightbox-prev" @click.stop="prevImage">❮</span>
             <span class="lightbox-next" @click.stop="nextImage">❯</span>
@@ -210,12 +364,59 @@ onMounted(() => {
     display: flex;
 }
 
+.lightbox-stage {
+    position: relative;
+    max-width: min(90vw, 960px);
+    max-height: 80vh;
+}
+
 .lightbox-image {
-    max-width: 90%;
+    display: block;
+    max-width: 100%;
     max-height: 80vh;
     border-radius: 1rem;
     box-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
     transition: transform 0.3s ease;
+}
+
+.lightbox-overlay {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    border-radius: 0 0 1rem 1rem;
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.8) 42%, rgba(15, 23, 42, 0.96) 100%);
+    padding: 1.1rem 1.2rem 1.2rem;
+    text-align: left;
+}
+
+.lightbox-title {
+    color: #fff7ed;
+    font-size: 1.35rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.lightbox-eyebrow {
+    color: rgba(254, 240, 138, 0.92);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+}
+
+.lightbox-meta {
+    margin-top: 0.35rem;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.lightbox-description {
+    margin-top: 0.45rem;
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 0.95rem;
+    line-height: 1.5;
 }
 
 .lightbox-close {

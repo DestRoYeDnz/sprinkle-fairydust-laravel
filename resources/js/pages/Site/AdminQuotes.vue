@@ -67,6 +67,9 @@ function emptyQuoteForm() {
         calc_base_amount: '',
         calc_setup_amount: '',
         calc_travel_amount: '',
+        calc_discount_name: '',
+        calc_discount_description: '',
+        calc_discount_amount: '',
         calc_subtotal: '',
         calc_gst_amount: '',
         calc_total_amount: '',
@@ -114,6 +117,9 @@ function buildPayload(source) {
         calc_base_amount: toNullableNumber(source.calc_base_amount),
         calc_setup_amount: toNullableNumber(source.calc_setup_amount),
         calc_travel_amount: toNullableNumber(source.calc_travel_amount),
+        calc_discount_name: source.calc_discount_name || null,
+        calc_discount_description: source.calc_discount_description || null,
+        calc_discount_amount: toNullableNumber(source.calc_discount_amount),
         calc_subtotal: toNullableNumber(source.calc_subtotal),
         calc_gst_amount: toNullableNumber(source.calc_gst_amount),
         calc_total_amount: toNullableNumber(source.calc_total_amount),
@@ -288,6 +294,26 @@ function hasAddOnBreakdown(item) {
     return parsedAddOnsFromQuote(item).length > 0;
 }
 
+function shouldShowDiscount(item) {
+    const discountAmount = normalizeAmount(item?.calc_discount_amount);
+
+    return discountAmount !== null && discountAmount > 0;
+}
+
+function formatDiscountBreakdown(item) {
+    if (!shouldShowDiscount(item)) {
+        return '—';
+    }
+
+    const parts = [
+        String(item?.calc_discount_name ?? '').trim(),
+        String(item?.calc_discount_description ?? '').trim(),
+    ].filter(Boolean);
+    const label = parts.length ? parts.join(' - ') : 'Discount';
+
+    return `${label} (-$${normalizeAmount(item.calc_discount_amount).toFixed(2)})`;
+}
+
 function shouldShowGst(item) {
     const gstAmount = normalizeAmount(item?.calc_gst_amount);
 
@@ -300,6 +326,9 @@ function hasCalculationBreakdown(item) {
         item.calc_base_amount,
         item.calc_setup_amount,
         item.calc_travel_amount,
+        item.calc_discount_name,
+        item.calc_discount_description,
+        item.calc_discount_amount,
         item.calc_subtotal,
         item.calc_gst_amount,
         item.calc_total_amount,
@@ -470,6 +499,21 @@ function calculatorUrl(source) {
         params.set('notes', source.notes);
     }
 
+    if (source.terms_accepted) {
+        params.set('terms_accepted', '1');
+    }
+
+    if (shouldShowDiscount(source)) {
+        params.set('include_discount', '1');
+        if (source.calc_discount_name) {
+            params.set('discount_name', source.calc_discount_name);
+        }
+        if (source.calc_discount_description) {
+            params.set('discount_description', source.calc_discount_description);
+        }
+        params.set('discount_amount', String(source.calc_discount_amount));
+    }
+
     const query = params.toString();
 
     return query ? `/admin/calculator?${query}` : '/admin/calculator';
@@ -499,6 +543,9 @@ function applyQuoteData(item, quote) {
     item.calc_base_amount = normalizeAmount(quote.calc_base_amount);
     item.calc_setup_amount = normalizeAmount(quote.calc_setup_amount);
     item.calc_travel_amount = normalizeAmount(quote.calc_travel_amount);
+    item.calc_discount_name = quote.calc_discount_name ?? '';
+    item.calc_discount_description = quote.calc_discount_description ?? '';
+    item.calc_discount_amount = normalizeAmount(quote.calc_discount_amount);
     item.calc_subtotal = normalizeAmount(quote.calc_subtotal);
     item.calc_gst_amount = normalizeAmount(quote.calc_gst_amount);
     item.calc_total_amount = normalizeAmount(quote.calc_total_amount);
@@ -546,6 +593,9 @@ function normalizeQuote(quote) {
         calc_base_amount: normalizeAmount(quote.calc_base_amount),
         calc_setup_amount: normalizeAmount(quote.calc_setup_amount),
         calc_travel_amount: normalizeAmount(quote.calc_travel_amount),
+        calc_discount_name: quote.calc_discount_name ?? '',
+        calc_discount_description: quote.calc_discount_description ?? '',
+        calc_discount_amount: normalizeAmount(quote.calc_discount_amount),
         calc_subtotal: normalizeAmount(quote.calc_subtotal),
         calc_gst_amount: normalizeAmount(quote.calc_gst_amount),
         calc_total_amount: normalizeAmount(quote.calc_total_amount),
@@ -595,6 +645,9 @@ function normalizeQuote(quote) {
             calc_base_amount: normalizeAmount(quote.calc_base_amount),
             calc_setup_amount: normalizeAmount(quote.calc_setup_amount),
             calc_travel_amount: normalizeAmount(quote.calc_travel_amount),
+            calc_discount_name: quote.calc_discount_name ?? '',
+            calc_discount_description: quote.calc_discount_description ?? '',
+            calc_discount_amount: normalizeAmount(quote.calc_discount_amount),
             calc_subtotal: normalizeAmount(quote.calc_subtotal),
             calc_gst_amount: normalizeAmount(quote.calc_gst_amount),
             calc_total_amount: normalizeAmount(quote.calc_total_amount),
@@ -625,6 +678,9 @@ function startEdit(item) {
         calc_base_amount: item.calc_base_amount,
         calc_setup_amount: item.calc_setup_amount,
         calc_travel_amount: item.calc_travel_amount,
+        calc_discount_name: item.calc_discount_name,
+        calc_discount_description: item.calc_discount_description,
+        calc_discount_amount: item.calc_discount_amount,
         calc_subtotal: item.calc_subtotal,
         calc_gst_amount: item.calc_gst_amount,
         calc_total_amount: item.calc_total_amount,
@@ -1285,6 +1341,7 @@ onMounted(() => {
                                     <div v-if="addOnTotalAmount(quote) !== null" class="quote-item"><dt>Add-on Total</dt><dd>{{ formatCurrency(addOnTotalAmount(quote)) }}</dd></div>
                                     <div class="quote-item"><dt>Setup</dt><dd>{{ formatCurrency(quote.calc_setup_amount) }}</dd></div>
                                     <div class="quote-item"><dt>Travel</dt><dd>{{ formatCurrency(quote.calc_travel_amount) }}</dd></div>
+                                    <div v-if="shouldShowDiscount(quote)" class="quote-item quote-item--full"><dt>Discount</dt><dd>{{ formatDiscountBreakdown(quote) }}</dd></div>
                                     <div class="quote-item"><dt>Subtotal</dt><dd>{{ formatCurrency(quote.calc_subtotal) }}</dd></div>
                                     <div v-if="shouldShowGst(quote)" class="quote-item"><dt>GST</dt><dd>{{ formatCurrency(quote.calc_gst_amount) }}</dd></div>
                                     <div class="quote-item"><dt>Total</dt><dd>{{ formatCurrency(quote.calc_total_amount) }}</dd></div>

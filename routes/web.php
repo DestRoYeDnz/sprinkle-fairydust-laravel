@@ -46,6 +46,7 @@ Route::get('designs', fn () => Inertia::render('Site/Designs'))->name('designs')
 Route::get('testimonials', fn () => Inertia::render('Site/Testimonials'))->name('testimonials');
 Route::get('add-testimonial', fn () => Inertia::render('Site/AddTestimonial'))->name('add-testimonial');
 Route::get('quote', fn () => Inertia::render('Site/Quote'))->name('quote');
+Route::get('quote/overview', fn () => Inertia::render('Site/QuoteOverview'))->name('quote.overview');
 Route::get('csrf-token', function (Request $request) {
     $request->session()->regenerateToken();
 
@@ -77,6 +78,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('admin/settings', fn () => Inertia::render('Site/AdminSettings'))->name('admin.settings');
     Route::get('admin/tracking', fn () => Inertia::render('Site/AdminTracking'))->name('admin.tracking');
 
+    Route::get('admin/events/list', [EventController::class, 'adminIndex'])->name('admin.events.index');
     Route::get('admin/quotes/list', [QuoteManagementController::class, 'index'])->name('admin.quotes.index');
     Route::post('admin/quotes', [QuoteManagementController::class, 'store'])->name('admin.quotes.store');
     Route::put('admin/quotes/{quote}', [QuoteManagementController::class, 'update'])->name('admin.quotes.update');

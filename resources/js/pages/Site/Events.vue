@@ -92,11 +92,11 @@ onMounted(async () => {
 </script>
 
 <template>
-    <Head title="Upcoming Face Painting Events | Auckland">
+    <Head title="Upcoming Face Painting Events | South Auckland and Northern Waikato">
         <meta
             head-key="description"
             name="description"
-            content="Find upcoming face painting events and public appearances by Sprinkle Fairydust across Auckland."
+            content="Find upcoming face painting events and public appearances by Sprinkle Fairydust across South Auckland and Northern Waikato."
         />
     </Head>
 

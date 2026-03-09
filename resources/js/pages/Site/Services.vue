@@ -53,11 +53,11 @@ const addOnMenu = [
 </script>
 
 <template>
-    <Head title="Face Painting Services for Kids Parties | Auckland">
+    <Head title="Face Painting Services for Kids Parties | South Auckland and Northern Waikato">
         <meta
             head-key="description"
             name="description"
-            content="Kids face painting services for birthday parties, school events and celebrations in Pukekohe, Papakura, Drury and Auckland."
+            content="Kids face painting services for birthday parties, school events and celebrations across South Auckland and Northern Waikato."
         />
     </Head>
 
@@ -123,7 +123,7 @@ const addOnMenu = [
                 </div>
 
                 <p class="mt-4 text-sm text-cyan-100/90">
-                    Note: travel outside core Auckland + Franklin zones may incur an additional travel fee.
+                    Note: travel outside South Auckland and Northern Waikato may incur an additional travel fee.
                 </p>
             </div>
 

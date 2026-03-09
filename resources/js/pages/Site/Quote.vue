@@ -328,11 +328,11 @@ async function submitForm() {
 </script>
 
 <template>
-    <Head title="Get a Face Painting Quote | Auckland Birthday Parties">
+    <Head title="Get a Face Painting Quote | South Auckland and Northern Waikato">
         <meta
             head-key="description"
             name="description"
-            content="Request a quote for kids face painting for birthday parties in Pukekohe, Papakura, Drury and Auckland."
+            content="Request a quote for kids face painting for birthday parties across South Auckland and Northern Waikato."
         />
     </Head>
 
@@ -499,7 +499,7 @@ async function submitForm() {
                             v-model="form.travel_area"
                             type="text"
                             class="form-input"
-                            placeholder="Pukekohe, Papakura, etc"
+                            placeholder="South Auckland or Northern Waikato"
                             @focus="trackQuoteStartIfNeeded"
                         />
                     </label>

@@ -84,11 +84,11 @@ onMounted(() => {
 </script>
 
 <template>
-    <Head title="Face Painting Designs for Kids | Auckland">
+    <Head title="Face Painting Designs for Kids | South Auckland and Northern Waikato">
         <meta
             head-key="description"
             name="description"
-            content="Explore custom face painting designs created for kids birthday parties and events in Auckland."
+            content="Explore custom face painting designs created for kids birthday parties and events across South Auckland and Northern Waikato."
         />
     </Head>
 

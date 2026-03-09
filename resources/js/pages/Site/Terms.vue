@@ -69,7 +69,7 @@ const sections = [
         <meta
             head-key="description"
             name="description"
-            content="Read the booking terms and conditions for Sprinkle Fairydust face painting services across Auckland."
+            content="Read the booking terms and conditions for Sprinkle Fairydust face painting services across South Auckland and Northern Waikato."
         />
     </Head>
 

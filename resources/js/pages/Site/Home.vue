@@ -6,43 +6,40 @@ defineOptions({
     layout: SprinkleLayout,
 });
 
+const props = defineProps({
+    testimonials: {
+        type: Array,
+        default: () => [],
+    },
+});
+
 const trustStats = [
     { label: 'Events painted', value: '350+' },
     { label: 'Repeat bookings', value: '120+' },
     { label: 'Typical response time', value: '< 24h' },
-    { label: 'Service area', value: 'Auckland + Franklin' },
-];
-
-const reviewHighlights = [
-    {
-        quote: 'Melody was incredible with the kids and the designs were beautiful.',
-        source: 'Google Review, January 2026',
-    },
-    {
-        quote: 'Fast setup, professional hygiene, and everyone left smiling.',
-        source: 'Facebook Review, December 2025',
-    },
-    {
-        quote: 'The queue moved quickly and the face paints looked amazing in photos.',
-        source: 'Market Event Booking, November 2025',
-    },
+    { label: 'Service area', value: 'South Auckland and Northern Waikato' },
 ];
 
 const whatWeDo = [
     {
         title: 'Face Painting',
-        description: 'Full-face and quick queue designs for birthdays, schools, and community events.',
-        href: '/face-painting',
+        description: 'Face painting for parties, events, and festivals.',
+    },
+    {
+        title: 'Baby Bump Painting',
+        description: 'Beautiful baby bump painting and creative body art for special occasions.',
     },
     {
         title: 'Glitter Tattoos',
-        description: 'Fast, sparkly add-on service that works well for active and mixed-age events.',
-        href: '/glitter-tattoos',
+        description: 'Sparkly glitter tattoos that are quick to apply and fun for all ages.',
     },
     {
-        title: 'Festival Service',
-        description: 'High-throughput setup for fairs, markets, and large public activations.',
-        href: '/festival-face-painting',
+        title: 'Mermaid Hair Extensions',
+        description: 'Colourful mermaid hair extensions for extra festival sparkle.',
+    },
+    {
+        title: '3D Face Bling ✨',
+        description: 'Handmade, skin-safe 3D face bling to add shimmer and shine.',
     },
 ];
 
@@ -66,11 +63,11 @@ const bookingFlow = [
 </script>
 
 <template>
-    <Head title="Kids Face Painting for Birthday Parties in Auckland">
+    <Head title="Kids Face Painting for Birthday Parties in South Auckland and Northern Waikato">
         <meta
             head-key="description"
             name="description"
-            content="Professional kids face painting for birthday parties and events in Pukekohe, Papakura, Drury and across Auckland."
+            content="Professional kids face painting for birthday parties and events across South Auckland and Northern Waikato."
         />
     </Head>
 
@@ -102,7 +99,7 @@ const bookingFlow = [
             </h2>
 
             <p class="mb-4 text-lg leading-relaxed text-white/90">
-                We bring professional face painting to birthdays, markets, school fairs, and community events across Auckland and Franklin.
+                We bring professional face painting to birthdays, markets, school fairs, and community events across South Auckland and Northern Waikato.
             </p>
 
             <p class="mb-6 text-lg leading-relaxed text-white/90">
@@ -127,22 +124,16 @@ const bookingFlow = [
                 </article>
             </div>
 
-            <div class="review-grid">
-                <article v-for="item in reviewHighlights" :key="item.source" class="review-card">
-                    <p class="review-quote">"{{ item.quote }}"</p>
-                    <p class="review-source">{{ item.source }}</p>
+            <div v-if="props.testimonials.length" class="review-grid">
+                <article v-for="item in props.testimonials" :key="item.id" class="review-card">
+                    <p class="review-quote">"{{ item.testimonial }}"</p>
+                    <p class="review-source">{{ item.name }}</p>
                 </article>
             </div>
+            <p v-else class="review-empty">Approved client testimonials will appear here soon.</p>
 
             <div class="mt-6 text-center">
-                <a
-                    href="https://www.facebook.com/melfairysfacepainting"
-                    target="_blank"
-                    rel="noopener"
-                    class="review-link"
-                >
-                    See Facebook Reviews
-                </a>
+                <Link href="/testimonials" class="review-link">Read more testimonials</Link>
             </div>
         </section>
 
@@ -151,9 +142,12 @@ const bookingFlow = [
 
             <div class="service-grid">
                 <article v-for="item in whatWeDo" :key="item.title" class="service-card">
+                    <div class="service-placeholder" :aria-label="`${item.title} image placeholder`">
+                        <span class="service-placeholder-label">Image placeholder</span>
+                        <span class="service-placeholder-name">{{ item.title }}</span>
+                    </div>
                     <h3 class="service-title">{{ item.title }}</h3>
                     <p class="service-copy">{{ item.description }}</p>
-                    <Link :href="item.href" class="service-link">Learn more</Link>
                 </article>
             </div>
         </section>
@@ -282,6 +276,16 @@ const bookingFlow = [
     padding: 0.45rem 0.9rem;
 }
 
+.review-empty {
+    margin: 0;
+    border: 1px dashed rgba(153, 246, 228, 0.45);
+    border-radius: 0.9rem;
+    background: rgba(15, 23, 42, 0.3);
+    padding: 1rem;
+    color: rgba(236, 254, 255, 0.9);
+    text-align: center;
+}
+
 .service-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -295,6 +299,36 @@ const bookingFlow = [
     padding: 0.8rem;
 }
 
+.service-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    margin-bottom: 0.85rem;
+    min-height: 150px;
+    border: 1px dashed rgba(191, 219, 254, 0.6);
+    border-radius: 0.8rem;
+    background: linear-gradient(135deg, rgba(14, 116, 144, 0.28), rgba(59, 130, 246, 0.16));
+    text-align: center;
+}
+
+.service-placeholder-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #a5f3fc;
+}
+
+.service-placeholder-name {
+    max-width: 80%;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #f0f9ff;
+    line-height: 1.35;
+}
+
 .service-title {
     margin: 0;
     font-size: 1.05rem;
@@ -306,18 +340,6 @@ const bookingFlow = [
     font-size: 0.9rem;
     color: rgba(236, 254, 255, 0.92);
     line-height: 1.5;
-}
-
-.service-link {
-    display: inline-flex;
-    margin-top: 0.6rem;
-    border-radius: 999px;
-    border: 1px solid rgba(224, 247, 255, 0.95);
-    background: linear-gradient(135deg, #ecfeff, #bae6fd);
-    color: #0f172a;
-    font-weight: 700;
-    font-size: 0.8rem;
-    padding: 0.4rem 0.75rem;
 }
 
 .flow-grid {

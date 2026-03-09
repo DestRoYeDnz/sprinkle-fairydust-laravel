@@ -102,11 +102,11 @@ onMounted(() => {
 </script>
 
 <template>
-    <Head title="Face Painting Reviews | Auckland Kids Parties">
+    <Head title="Face Painting Reviews | South Auckland and Northern Waikato">
         <meta
             head-key="description"
             name="description"
-            content="Read reviews from happy parents and families who booked Sprinkle Fairydust for kids parties in Auckland."
+            content="Read reviews from happy parents and families who booked Sprinkle Fairydust for kids parties across South Auckland and Northern Waikato."
         />
     </Head>
 

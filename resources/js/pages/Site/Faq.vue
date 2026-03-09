@@ -40,7 +40,7 @@ const faqs = [
         <meta
             head-key="description"
             name="description"
-            content="Frequently asked questions about booking face painting for birthdays and events across Auckland."
+            content="Frequently asked questions about booking face painting for birthdays and events across South Auckland and Northern Waikato."
         />
     </Head>
 

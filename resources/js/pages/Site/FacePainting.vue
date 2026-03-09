@@ -35,11 +35,11 @@ const highlights = [
 </script>
 
 <template>
-    <Head title="Face Painting in Auckland | Sprinkle Fairydust">
+    <Head title="Face Painting in South Auckland and Northern Waikato | Sprinkle Fairydust">
         <meta
             head-key="description"
             name="description"
-            content="Professional kids face painting for birthdays, school fairs, and community events across Auckland and Franklin."
+            content="Professional kids face painting for birthdays, school fairs, and community events across South Auckland and Northern Waikato."
         />
     </Head>
 

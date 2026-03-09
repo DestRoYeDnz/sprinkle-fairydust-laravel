@@ -7,12 +7,30 @@ use App\Http\Controllers\Admin\TrackingStatsController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Api\AdminUploadController;
 use App\Http\Controllers\Api\EventController;
+use App\Models\Testimonial;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get('/', function () {
-    return Inertia::render('Site/Home');
+    $testimonials = Testimonial::query()
+        ->select(['id', 'name', 'testimonial'])
+        ->where('is_approved', true)
+        ->latest('approved_at')
+        ->latest('created_at')
+        ->limit(3)
+        ->get()
+        ->map(fn (Testimonial $testimonial): array => [
+            'id' => $testimonial->id,
+            'name' => $testimonial->name,
+            'testimonial' => $testimonial->testimonial,
+        ])
+        ->values()
+        ->all();
+
+    return Inertia::render('Site/Home', [
+        'testimonials' => $testimonials,
+    ]);
 })->name('home');
 
 Route::get('about', fn () => Inertia::render('Site/About'))->name('about');

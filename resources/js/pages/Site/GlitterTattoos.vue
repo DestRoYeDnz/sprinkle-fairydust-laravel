@@ -35,11 +35,11 @@ const highlights = [
 </script>
 
 <template>
-    <Head title="Glitter Tattoos in Auckland | Sprinkle Fairydust">
+    <Head title="Glitter Tattoos in South Auckland and Northern Waikato | Sprinkle Fairydust">
         <meta
             head-key="description"
             name="description"
-            content="Add long-lasting glitter tattoos to your birthday party or event booking in Auckland and Franklin."
+            content="Add long-lasting glitter tattoos to your birthday party or event booking in South Auckland and Northern Waikato."
         />
     </Head>
 

@@ -905,7 +905,7 @@ onMounted(async () => {
 
                             <div class="grid gap-4 md:grid-cols-2">
                                 <label class="field-label">Event Name
-                                    <input v-model="form.eventName" type="text" placeholder="e.g. Franklin Summer Fair" class="input" />
+                                    <input v-model="form.eventName" type="text" placeholder="e.g. South Auckland Summer Fair" class="input" />
                                 </label>
                                 <label class="field-label">Event Date
                                     <input v-model="form.eventDate" type="date" class="input" />
@@ -932,7 +932,7 @@ onMounted(async () => {
 
                             <div class="grid gap-4 md:grid-cols-2">
                                 <label class="field-label">Travel Area
-                                    <input v-model="form.travelArea" type="text" placeholder="e.g. Pukekohe / Franklin" class="input" />
+                                    <input v-model="form.travelArea" type="text" placeholder="e.g. South Auckland / Northern Waikato" class="input" />
                                 </label>
                                 <label class="field-label">Venue Type
                                     <select v-model="form.venueType" class="input">

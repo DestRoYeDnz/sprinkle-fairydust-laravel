@@ -8,11 +8,11 @@ defineOptions({
 </script>
 
 <template>
-    <Head title="About Sprinkle Fairydust | Auckland Face Painter">
+    <Head title="About Sprinkle Fairydust | Face Painter in South Auckland and Northern Waikato">
         <meta
             head-key="description"
             name="description"
-            content="Meet Melody, the creative face painter behind Sprinkle Fairydust, bringing colourful birthday magic to kids across Auckland."
+            content="Meet Melody, the creative face painter behind Sprinkle Fairydust, bringing colourful birthday magic to kids across South Auckland and Northern Waikato."
         />
     </Head>
 
@@ -41,52 +41,68 @@ defineOptions({
             </h2>
 
             <p class="mb-4 leading-relaxed text-white/90">
-                Hello, lovely souls! I’m <span class="font-semibold text-pink-300">Melody</span> —
-                the artist, dream-weaver, and smile-maker behind
-                <span class="text-yellow-300">Sprinkle Fairydust Facepainting</span>. 💖
-                What started as a childhood fascination with colour and imagination has blossomed into a joyful calling —
-                turning ordinary moments into glittering memories that sparkle long after the paint fades.
+                Hi, I’m <span class="font-semibold text-pink-300">Melody</span>.
             </p>
 
             <p class="mb-4 leading-relaxed text-white/90">
-                Each time I open my kit, it feels like opening a treasure chest of wonder — brushes poised like wands,
-                palettes gleaming with colour, and glitter that dances under the light. With every swirl and shimmer,
-                I love watching a child’s eyes widen in delight as they see themselves transform into their favourite
-                creature, hero, or mythical being. ✨
+                Since I was very young, I have been enthralled by the mythical, creative,
+                spontaneous, and whimsical world of fairytales and imagination.
             </p>
 
             <p class="mb-4 leading-relaxed text-white/90">
-                I use only the highest-quality, professional, skin-safe paints — gentle enough for little cheeks,
-                vibrant enough for big imaginations. My workspace is always filled with laughter, calm energy,
-                and a sprinkle of music — a place where creativity and comfort blend beautifully together.
+                I grew up surrounded by creativity. My extended family includes gardeners,
+                builders, bakers, weavers, sewers, and costume makers, as well as potters,
+                painters, poets, face painters, and body artists.
             </p>
 
             <p class="mb-4 leading-relaxed text-white/90">
-                From <span class="text-blue-300">whisper-soft butterflies</span> that flutter across foreheads
-                to <span class="text-orange-300">bold jungle tigers</span> ready to roar,
-                from <span class="text-green-300">enchanted fairies</span> with sparkling wings
-                to <span class="text-purple-300">rainbow princesses</span> crowned in glitter —
-                every design is painted with intention, heart, and a touch of magic.
+                My interest in face painting comes from growing up in such a creative family
+                and being exposed to the magic and whimsy of body art throughout my life.
+                I was gifted paints and brushes by family, and over the years I began
+                experimenting with them and developing my skills.
             </p>
 
             <p class="mb-4 leading-relaxed text-white/90">
-                Whether I’m creating joy at a <span class="text-pink-300">birthday celebration</span>,
-                adding colour to a <span class="text-sky-300">community festival</span>,
-                or sprinkling smiles at a <span class="text-yellow-300">corporate family day</span>,
-                my mission is simple — to help every guest feel radiant, unique, and a little more magical than before.
+                I am also a teacher. I have worked with both high school and primary-aged
+                children, and I have spent several years supporting learners with additional
+                needs. Because of this experience, I am comfortable engaging with children
+                of all ages and stages.
+            </p>
+
+            <p class="mb-4 leading-relaxed text-white/90">
+                I have now been face painting professionally for six years, and I absolutely
+                love it. I get so much joy from bringing <span class="text-yellow-300">rainbows</span>,
+                <span class="text-blue-300">scales</span>, and
+                <span class="text-pink-300">sparkles</span> to people and watching adults and
+                teens embrace their inner child.
+            </p>
+
+            <p class="mb-4 leading-relaxed text-white/90">
+                My favourite moment is seeing someone’s reaction when they look in the mirror
+                for the first time. It truly warms my heart.
+            </p>
+
+            <p class="mb-4 leading-relaxed text-white/90">
+                <span class="text-yellow-300">Face painting and body art is for everyone.</span>
+                Age does not matter. If you do not want your face painted, we can paint your
+                arm instead and create happy memories to reflect on for years to come.
             </p>
 
             <p class="mt-6 text-white/90 italic opacity-90">
-                So come and join me in a world where colour tells stories, laughter paints the air,
-                and every brushstroke whispers, “You are extraordinary.” 💫
+                When you book me, you get someone who loves bold colour and sparkly glitter,
+                but also someone who can go with the flow and be creative on the spot. You
+                get someone who is kind, fun, and able to work quickly to ensure you get the
+                most value from your booking.
             </p>
 
-            <Link
-                href="/quote"
-                class="cta rounded-2xl bg-white px-6 py-3 font-bold text-gray-900 shadow-lg transition hover:scale-105"
-            >
-                ✨ Get a Quote ✨
-            </Link>
+            <div class="mt-8 flex justify-center">
+                <Link
+                    href="/quote"
+                    class="cta inline-flex items-center justify-center rounded-2xl bg-white px-6 py-3 font-bold text-gray-900 shadow-lg transition hover:scale-105"
+                >
+                    ✨ Get a Quote ✨
+                </Link>
+            </div>
         </section>
     </main>
 </template>
